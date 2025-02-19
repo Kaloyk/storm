@@ -67,20 +67,12 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
         } else if (word == "values:") {
             continue;
         } else if (word == "states:") {
-            while (iss >> word) {
-                pomdp.states.push_back(trim(word));
-                STORM_PRINT("Parsed state: " + word);
-            }
+            parseIdentifierVector(iss, pomdp.states, "state");
         } else if (word == "actions:") {
-            while (iss >> word) {
-                pomdp.actions.push_back(trim(word));
-                STORM_PRINT("Parsed action: " + word);
-            }
+            parseIdentifierVector(iss, pomdp.actions, "action");
         } else if (word == "observations:") {
             STORM_PRINT("Parsing observations");
-            while (iss >> word) {
-                pomdp.observations.push_back(trim(word));
-            }
+            parseIdentifierVector(iss, pomdp.observations, "observation");
         } else if (word == "start:") {
             STORM_PRINT("Parsing start probabilities");
             std::string token;
@@ -851,7 +843,7 @@ PomdpSolveParserResult<ValueType> PomdpSolveParser<ValueType>::parsePomdpSolveFi
     }
     new_pomdp->updateObservations(std::move(stateObservations), true);
 
-    std::string outputFilePath = "/home/kaloyank/storm/storm/resources/examples/testfiles/parser/example.pomdp.dot";
+    std::string outputFilePath = "/home/kaloyank/storm/kaloyanFork/storm/resources/examples/testfiles/parser/example.pomdp.dot";
     auto modelPtr = new_pomdp->template as<storm::models::sparse::Model<ValueType>>();
     storm::api::exportSparseModelAsDot(modelPtr, outputFilePath);
 

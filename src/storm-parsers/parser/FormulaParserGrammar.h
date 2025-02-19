@@ -40,6 +40,8 @@ class FormulaParserGrammar : public qi::grammar<Iterator, std::vector<storm::jan
      */
     void addIdentifierExpression(std::string const& identifier, storm::expressions::Expression const& expression);
 
+    qi::symbols<char, storm::expressions::Expression> const& getIdentifiers() const;
+
    private:
     void initialize();
 
@@ -180,9 +182,11 @@ class FormulaParserGrammar : public qi::grammar<Iterator, std::vector<storm::jan
     qi::rule<Iterator, std::shared_ptr<storm::logic::Formula const>(), Skipper> instantaneousRewardFormula;
     qi::rule<Iterator, std::shared_ptr<storm::logic::Formula const>(), Skipper> cumulativeRewardFormula;
     qi::rule<Iterator, std::shared_ptr<storm::logic::Formula const>(), Skipper> totalRewardFormula;
+    qi::rule<Iterator, std::shared_ptr<storm::logic::Formula const>(), Skipper> discountedCumulativeRewardFormula;
+    qi::rule<Iterator, std::shared_ptr<storm::logic::Formula const>(), Skipper> discountedTotalRewardFormula;
 
     // Game Formulae
-    qi::rule<Iterator, storm::logic::PlayerCoalition(), qi::locals<std::vector<boost::variant<std::string, storm::storage::PlayerIndex>>>, Skipper>
+    qi::rule<Iterator, storm::logic::PlayerCoalition(), qi::locals<std::vector<std::variant<std::string, storm::storage::PlayerIndex>>>, Skipper>
         playerCoalition;
     qi::rule<Iterator, std::shared_ptr<storm::logic::Formula const>(), Skipper> gameFormula;
 
@@ -206,7 +210,7 @@ class FormulaParserGrammar : public qi::grammar<Iterator, std::vector<storm::jan
 
     void addHoaAPMapping(storm::logic::Formula const& hoaFormula, const std::string& ap, std::shared_ptr<storm::logic::Formula const>& expression) const;
 
-    storm::logic::PlayerCoalition createPlayerCoalition(std::vector<boost::variant<std::string, storm::storage::PlayerIndex>> const& playerIds) const;
+    storm::logic::PlayerCoalition createPlayerCoalition(std::vector<std::variant<std::string, storm::storage::PlayerIndex>> const& playerIds) const;
     std::shared_ptr<storm::logic::Formula const> createGameFormula(storm::logic::PlayerCoalition const& coalition,
                                                                    std::shared_ptr<storm::logic::Formula const> const& subformula) const;
 
@@ -229,7 +233,12 @@ class FormulaParserGrammar : public qi::grammar<Iterator, std::vector<storm::jan
     std::shared_ptr<storm::logic::Formula const> createCumulativeRewardFormula(
         std::vector<std::tuple<boost::optional<storm::logic::TimeBound>, boost::optional<storm::logic::TimeBound>,
                                std::shared_ptr<storm::logic::TimeBoundReference>>> const& timeBounds) const;
+    std::shared_ptr<storm::logic::Formula const> createDiscountedCumulativeRewardFormula(
+        storm::expressions::Expression const& discountFactor,
+        std::vector<std::tuple<boost::optional<storm::logic::TimeBound>, boost::optional<storm::logic::TimeBound>,
+                               std::shared_ptr<storm::logic::TimeBoundReference>>> const& timeBounds) const;
     std::shared_ptr<storm::logic::Formula const> createTotalRewardFormula() const;
+    std::shared_ptr<storm::logic::Formula const> createDiscountedTotalRewardFormula(storm::expressions::Expression const& discountFactor) const;
     std::shared_ptr<storm::logic::Formula const> createLongRunAverageRewardFormula() const;
     std::shared_ptr<storm::logic::Formula const> createAtomicExpressionFormula(storm::expressions::Expression const& expression) const;
     std::shared_ptr<storm::logic::Formula const> createBooleanLiteralFormula(bool literal) const;

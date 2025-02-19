@@ -20,6 +20,7 @@
 #include "storm-pomdp/analysis/QualitativeAnalysisOnGraphs.h"
 #include "storm-pomdp/analysis/UniqueObservationStates.h"
 #include "storm-pomdp/modelchecker/BeliefExplorationPomdpModelChecker.h"
+#include "storm-pomdp/parser/PomdpSolveParser.h"
 #include "storm-pomdp/transformer/ApplyFiniteSchedulerToPomdp.h"
 #include "storm-pomdp/transformer/BinaryPomdpTransformer.h"
 #include "storm-pomdp/transformer/GlobalPOMDPSelfLoopEliminator.h"
@@ -35,8 +36,6 @@
 
 #include "storm/exceptions/NotSupportedException.h"
 #include "storm/exceptions/UnexpectedException.h"
-
-#include "storm-pars/transformer/ParametricTransformer.h"
 
 #include <typeinfo>
 
@@ -358,12 +357,6 @@ bool performTransformation(std::shared_ptr<storm::models::sparse::Pomdp<ValueTyp
             STORM_PRINT_AND_LOG(" done.\n");
             pmc->printModelInformationToStream(std::cout);
         }
-        if (pmc->hasRewardModel() && transformSettings.isConstantRewardsSet()) {
-            STORM_PRINT_AND_LOG("Ensuring constant rewards...");
-            pmc = storm::transformer::makeRewardsConstant(*(pmc->template as<storm::models::sparse::Dtmc<storm::RationalFunction>>()));
-            STORM_PRINT_AND_LOG(" done.\n");
-            pmc->printModelInformationToStream(std::cout);
-        }
         STORM_PRINT_AND_LOG("Exporting pMC...");
         storm::analysis::ConstraintCollector<storm::RationalFunction> constraints(*pmc);
         auto const& parameterSet = constraints.getVariables();
@@ -463,19 +456,60 @@ void processOptionsWithDdLib(storm::cli::SymbolicInput const& symbolicInput, sto
     }
 }
 
-void processOptions() {
-    auto symbolicInput = storm::cli::parseSymbolicInput();
-    storm::cli::ModelProcessingInformation mpi;
-    std::tie(symbolicInput, mpi) = storm::cli::preprocessSymbolicInput(symbolicInput);
-    switch (mpi.ddType) {
+template<storm::dd::DdType DdType>
+void processOptionsForPOMDPsolveWithDdLib(std::string const& filename) {
+    auto const& generalSettings = storm::settings::getModule<storm::settings::modules::GeneralSettings>();
+    if (generalSettings.isExactSet()) {
+        STORM_LOG_THROW(DdType == storm::dd::DdType::Sylvan, storm::exceptions::UnexpectedException,
+                        "Exact arithmetic is only supported with Dd library Sylvan.");
+        auto parserResult = storm::pomdp::parser::PomdpSolveParser<storm::RationalNumber>::parsePomdpSolveFile(filename);
+        STORM_LOG_THROW(parserResult.pomdp, storm::exceptions::UnexpectedException, "Expected POMDP to be returned by parser, but found none.");
+        std::string formulaStr = "Rmax=? [C{" + storm::utility::to_string(parserResult.discountFactor) + "}]";
+        auto formula = storm::api::parseProperties(formulaStr).front().getRawFormula();
+        auto formulaInfo = storm::pomdp::analysis::getFormulaInformation(*(parserResult.pomdp), *formula);
+        performAnalysis<storm::RationalNumber, storm::dd::DdType::Sylvan, storm::RationalNumber>(parserResult.pomdp, formulaInfo, *formula);
+    } else {
+        auto parserResult = storm::pomdp::parser::PomdpSolveParser<double>::parsePomdpSolveFile(filename);
+        STORM_LOG_THROW(parserResult.pomdp, storm::exceptions::UnexpectedException, "Expected POMDP to be returned by parser, but found none.");
+        std::string formulaStr = "Rmax=? [C{" + std::to_string(parserResult.discountFactor) + "}]";
+        auto formula = storm::api::parseProperties(formulaStr).front().getRawFormula();
+        auto formulaInfo = storm::pomdp::analysis::getFormulaInformation(*(parserResult.pomdp), *formula);
+        performAnalysis<double, DdType, double>(parserResult.pomdp, formulaInfo, *formula);
+    }
+}
+
+void processOptionsForPOMDPsolve(std::string const& filename) {
+    auto const& coreSettings = storm::settings::getModule<storm::settings::modules::CoreSettings>();
+    switch (coreSettings.getDdLibraryType()) {
         case storm::dd::DdType::CUDD:
-            processOptionsWithDdLib<storm::dd::DdType::CUDD>(symbolicInput, mpi);
+            processOptionsForPOMDPsolveWithDdLib<storm::dd::DdType::CUDD>(filename);
             break;
         case storm::dd::DdType::Sylvan:
-            processOptionsWithDdLib<storm::dd::DdType::Sylvan>(symbolicInput, mpi);
+            processOptionsForPOMDPsolveWithDdLib<storm::dd::DdType::Sylvan>(filename);
             break;
         default:
             STORM_LOG_THROW(false, storm::exceptions::UnexpectedException, "Unexpected Dd Type.");
+    }
+}
+
+void processOptions() {
+    auto const& pomdpSettings = storm::settings::getModule<storm::settings::modules::POMDPSettings>();
+    if (pomdpSettings.isPOMDPsolveInputSet()) {
+        processOptionsForPOMDPsolve(pomdpSettings.getPOMDPsolveInputFilename());
+    } else {
+        auto symbolicInput = storm::cli::parseSymbolicInput();
+        storm::cli::ModelProcessingInformation mpi;
+        std::tie(symbolicInput, mpi) = storm::cli::preprocessSymbolicInput(symbolicInput);
+        switch (mpi.ddType) {
+            case storm::dd::DdType::CUDD:
+                processOptionsWithDdLib<storm::dd::DdType::CUDD>(symbolicInput, mpi);
+                break;
+            case storm::dd::DdType::Sylvan:
+                processOptionsWithDdLib<storm::dd::DdType::Sylvan>(symbolicInput, mpi);
+                break;
+            default:
+                STORM_LOG_THROW(false, storm::exceptions::UnexpectedException, "Unexpected Dd Type.");
+        }
     }
 }
 }  // namespace cli
@@ -491,28 +525,7 @@ void processOptions() {
  */
 int main(const int argc, const char** argv) {
     // try {
-    storm::utility::setUp();
-    storm::cli::printHeader("Storm-pomdp", argc, argv);
-    storm::settings::initializePomdpSettings("Storm-POMDP", "storm-pomdp");
-
-    bool optionsCorrect = storm::cli::parseOptions(argc, argv);
-    if (!optionsCorrect) {
-        return -1;
-    }
-    storm::utility::Stopwatch totalTimer(true);
-    storm::cli::setUrgentOptions();
-
-    // Invoke storm-pomdp with obtained settings
-    storm::pomdp::cli::processOptions();
-
-    totalTimer.stop();
-    if (storm::settings::getModule<storm::settings::modules::ResourceSettings>().isPrintTimeAndMemorySet()) {
-        storm::cli::printTimeAndMemoryStatistics(totalTimer.getTimeInMilliseconds());
-    }
-
-    // All operations have now been performed, so we clean up everything and terminate.
-    storm::utility::cleanUp();
-    return 0;
+    return storm::cli::process("Storm-POMDP", "storm-pomdp", storm::settings::initializePomdpSettings, storm::pomdp::cli::processOptions, argc, argv);
     // } catch (storm::exceptions::BaseException const &exception) {
     //    STORM_LOG_ERROR("An exception caused Storm-pomdp to terminate. The message of the exception is: " << exception.what());
     //    return 1;

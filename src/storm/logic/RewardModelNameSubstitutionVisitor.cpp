@@ -57,7 +57,8 @@ boost::any RewardModelNameSubstitutionVisitor::visit(BoundedUntilFormula const& 
     }
 }
 
-boost::any RewardModelNameSubstitutionVisitor::visit(CumulativeRewardFormula const& f, boost::any const& data) const {
+boost::any RewardModelNameSubstitutionVisitor::visit(CumulativeRewardFormula const& f, boost::any const&) const {
+    // Data is unused; no children to pass this on.
     std::vector<TimeBound> bounds;
     std::vector<TimeBoundReference> timeBoundReferences;
     for (uint64_t i = 0; i < f.getDimension(); ++i) {
@@ -91,6 +92,26 @@ std::string const& RewardModelNameSubstitutionVisitor::getNewName(std::string co
         return oldName;
     } else {
         return nameIt->second;
+    }
+}
+
+boost::any RewardModelNameSubstitutionVisitor::visit(DiscountedCumulativeRewardFormula const& f, boost::any const&) const {
+    // Data is unused; no children to pass this on.
+    std::vector<TimeBound> bounds;
+    std::vector<TimeBoundReference> timeBoundReferences;
+    for (uint64_t i = 0; i < f.getDimension(); ++i) {
+        bounds.emplace_back(TimeBound(f.isBoundStrict(i), f.getBound(i)));
+        storm::logic::TimeBoundReference tbr = f.getTimeBoundReference(i);
+        if (tbr.isRewardBound()) {
+            tbr = storm::logic::TimeBoundReference(getNewName(tbr.getRewardName()), tbr.getOptionalRewardAccumulation());
+        }
+        timeBoundReferences.push_back(std::move(tbr));
+    }
+    if (f.hasRewardAccumulation()) {
+        return std::static_pointer_cast<Formula>(
+            std::make_shared<DiscountedCumulativeRewardFormula>(f.getDiscountFactor(), bounds, timeBoundReferences, f.getRewardAccumulation()));
+    } else {
+        return std::static_pointer_cast<Formula>(std::make_shared<DiscountedCumulativeRewardFormula>(f.getDiscountFactor(), bounds, timeBoundReferences));
     }
 }
 

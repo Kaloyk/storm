@@ -817,6 +817,13 @@ std::vector<BeliefValueType> BeliefManager<PomdpType, BeliefValueType, StateType
     return res;
 }
 
+template<typename PomdpType, typename BeliefValueType, typename StateType>
+std::unordered_map<StateType, BeliefValueType> BeliefManager<PomdpType, BeliefValueType, StateType>::getBeliefAsMap(const BeliefId &beliefId) {
+    STORM_LOG_ASSERT(beliefId != noId(), "Tried to get a non-existent belief.");
+    STORM_LOG_ASSERT(beliefId < getNumberOfBeliefIds(), "Belief index " << beliefId << " is out of range.");
+    return std::unordered_map<StateType, BeliefValueType>(beliefs[beliefId].begin(), beliefs[beliefId].end());
+}
+
 template class BeliefManager<storm::models::sparse::Pomdp<double>>;
 
 template class BeliefManager<storm::models::sparse::Pomdp<double>, storm::RationalNumber>;

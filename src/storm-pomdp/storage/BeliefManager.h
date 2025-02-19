@@ -99,15 +99,15 @@ class BeliefManager {
 
     std::vector<BeliefValueType> computeMatrixBeliefProduct(BeliefId const &beliefId, storm::storage::SparseMatrix<BeliefValueType> &matrix);
 
-   private:
-    std::vector<BeliefValueType> getBeliefAsVector(BeliefId const &beliefId);
+    std::unordered_map<StateType, BeliefValueType> getBeliefAsMap(BeliefId const &beliefId);
 
-    std::vector<BeliefValueType> getBeliefAsVector(const BeliefType &belief);
+    struct FreudenthalDiff {
+        FreudenthalDiff(StateType const &dimension, BeliefValueType diff);
 
-    BeliefClipping clipBeliefToGrid(BeliefType const &belief, uint64_t resolution, const storm::storage::BitVector &isInfinite);
-
-    template<typename DistributionType>
-    void adjustDistribution(DistributionType &distr);
+        StateType dimension;   // i
+        BeliefValueType diff;  // d[i]
+        bool operator>(FreudenthalDiff const &other) const;
+    };
 
     struct BeliefHash {
         std::size_t operator()(const BeliefType &belief) const;
@@ -117,13 +117,15 @@ class BeliefManager {
         bool operator()(const BeliefType &lhBelief, const BeliefType &rhBelief) const;
     };
 
-    struct FreudenthalDiff {
-        FreudenthalDiff(StateType const &dimension, BeliefValueType diff);
+   private:
+    std::vector<BeliefValueType> getBeliefAsVector(BeliefId const &beliefId);
 
-        StateType dimension;   // i
-        BeliefValueType diff;  // d[i]
-        bool operator>(FreudenthalDiff const &other) const;
-    };
+    std::vector<BeliefValueType> getBeliefAsVector(const BeliefType &belief);
+
+    BeliefClipping clipBeliefToGrid(BeliefType const &belief, uint64_t resolution, const storm::storage::BitVector &isInfinite);
+
+    template<typename DistributionType>
+    void adjustDistribution(DistributionType &distr);
 
     BeliefType const &getBelief(BeliefId const &id) const;
 

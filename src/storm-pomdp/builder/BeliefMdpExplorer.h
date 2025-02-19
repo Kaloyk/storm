@@ -21,7 +21,7 @@ class CheckTask;
 class CheckResult;
 }  // namespace modelchecker
 namespace builder {
-enum class ExplorationHeuristic { BreadthFirst, LowerBoundPrio, UpperBoundPrio, GapPrio, ProbabilityPrio };
+enum class ExplorationHeuristic { BreadthFirst, LowerBoundPrio, UpperBoundPrio, GapPrio, ProbabilityPrio, ExcessUncertainty };
 
 template<typename PomdpType, typename BeliefValueType = typename PomdpType::ValueType>
 class BeliefMdpExplorer {
@@ -170,7 +170,7 @@ class BeliefMdpExplorer {
 
     ValueType computeUpperValueBoundForScheduler(BeliefId const &beliefId, uint64_t schedulerId) const;
 
-    std::pair<bool, ValueType> computeFMSchedulerValueForMemoryNode(BeliefId const &beliefId, uint64_t memoryNode) const;
+    std::pair<bool, ValueType> computeFMSchedulerValueForMemoryNode(BeliefId const &beliefId, uint64_t index, uint64_t memoryNode) const;
 
     storm::storage::Scheduler<ValueType> getUpperValueBoundScheduler(uint64_t schedulerId) const;
 
@@ -180,11 +180,16 @@ class BeliefMdpExplorer {
 
     std::vector<storm::storage::Scheduler<ValueType>> getLowerValueBoundSchedulers() const;
 
-    void computeValuesOfExploredMdp(storm::Environment const &env, storm::solver::OptimizationDirection const &dir);
+    void computeValuesOfExploredMdp(storm::Environment const &env, storm::solver::OptimizationDirection const &dir, bool recomputeInitialValue = false);
+
+    void computeDiscountedTotalRewardsOfExploredMdp(storm::Environment const &env, storm::solver::OptimizationDirection const &dir, ValueType discountFactor,
+                                                    bool recomputeInitialValue = false);
 
     bool hasComputedValues() const;
 
     bool hasFMSchedulerValues() const;
+
+    bool hasSchedulerForExploredMdp() const;
 
     std::vector<ValueType> const &getValuesOfExploredMdp() const;
 
@@ -243,9 +248,11 @@ class BeliefMdpExplorer {
 
     const std::shared_ptr<storm::storage::Scheduler<BeliefMdpExplorer<PomdpType, BeliefValueType>::ValueType>> &getSchedulerForExploredMdp() const;
 
-    void setFMSchedValueList(std::vector<std::vector<std::unordered_map<uint64_t, ValueType>>> valueList);
+    void setFMSchedValueList(std::vector<std::vector<std::unordered_map<uint64_t, ValueType>>> valueList, uint64_t index);
 
-    uint64_t getNrOfMemoryNodesForObservation(uint32_t observation) const;
+    uint64_t addFMSchedValueList(std::vector<std::vector<std::unordered_map<uint64_t, ValueType>>> valueList);
+
+    uint64_t getNrOfMemoryNodesForObservation(uint64_t index, uint32_t observation) const;
 
     void storeExplorationState();
 
@@ -254,6 +261,16 @@ class BeliefMdpExplorer {
     void adjustActions(uint64_t totalNumberOfActions);
 
     std::vector<BeliefValueType> computeProductWithSparseMatrix(BeliefId const &beliefId, storm::storage::SparseMatrix<BeliefValueType> &matrix) const;
+
+    std::vector<BeliefId> getBeliefIdsOfStatesToExplore() const;
+
+    std::unordered_map<BeliefId, std::unordered_map<BeliefId, BeliefValueType>> getBeliefIdToBeliefMap(std::vector<BeliefId> beliefIds) const;
+
+    uint64_t getNrOfFMSchedulers() const;
+
+    uint64_t getHorizonOfState(uint64_t state) const;
+
+    void setDiscountedInformation(ValueType newDiscountFactor, ValueType newPrecision);
 
    private:
     MdpStateType noState() const;
@@ -295,6 +312,8 @@ class BeliefMdpExplorer {
     uint64_t nextId;
     ValueType prio;
 
+    std::unordered_map<MdpStateType, uint64_t> stateToHorizon;
+
     // Special states and choices during exploration
     std::optional<MdpStateType> extraTargetState;
     std::optional<MdpStateType> extraBottomState;
@@ -311,17 +330,20 @@ class BeliefMdpExplorer {
     // Value and scheduler related information
     storm::pomdp::storage::PreprocessingPomdpValueBounds<ValueType> pomdpValueBounds;
     storm::pomdp::storage::ExtremePOMDPValueBound<ValueType> extremeValueBound;
-    std::vector<std::vector<std::unordered_map<uint64_t, ValueType>>> fmSchedulerValueList;
+    std::vector<std::vector<std::vector<std::unordered_map<uint64_t, ValueType>>>> fmSchedulerValueList;
     std::vector<ValueType> lowerValueBounds;
     std::vector<ValueType> upperValueBounds;
     std::vector<ValueType> values;  // Contains an estimate during building and the actual result after a check has performed
     std::optional<storm::storage::BitVector> optimalChoices;
     std::optional<storm::storage::BitVector> optimalChoicesReachableMdpStates;
-    std::shared_ptr<storm::storage::Scheduler<ValueType>> scheduler;
+    std::shared_ptr<storm::storage::Scheduler<ValueType>> scheduler = nullptr;
 
     // The current status of this explorer
     ExplorationHeuristic explHeuristic;
     Status status;
+
+    ValueType discountFactor = storm::utility::one<ValueType>();
+    ValueType precision = storm::utility::zero<ValueType>();
 
     struct ExplorationStorage {
         std::vector<BeliefId> storedMdpStateToBeliefIdMap;

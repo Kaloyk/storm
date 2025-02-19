@@ -10,6 +10,8 @@
 #include "NativeMultiplier.h"
 #include "storm/environment/solver/MultiplierEnvironment.h"
 #include "storm/exceptions/IllegalArgumentException.h"
+#include "storm/exceptions/NotImplementedException.h"
+
 #include "storm/solver/SolverSelectionOptions.h"
 #include "storm/solver/multiplier/GmmxxMultiplier.h"
 #include "storm/utility/ProgressMeasurement.h"
@@ -72,6 +74,22 @@ void Multiplier<ValueType>::repeatedMultiplyAndReduce(Environment const& env, Op
 }
 
 template<typename ValueType>
+void Multiplier<ValueType>::repeatedMultiplyAndReduceWithFactor(Environment const& env, OptimizationDirection const& dir, std::vector<ValueType>& x,
+                                                                std::vector<ValueType> const* b, uint64_t n, ValueType factor) const {
+    storm::utility::ProgressMeasurement progress("multiplications");
+    progress.setMaxCount(n);
+    progress.startNewMeasurement(0);
+    for (uint64_t i = 0; i < n; ++i) {
+        multiplyAndReduce(env, dir, x, b, x);
+        std::transform(x.begin(), x.end(), x.begin(), [factor](ValueType& c) { return c * factor; });
+        if (storm::utility::resources::isTerminate()) {
+            STORM_LOG_WARN("Aborting after " << i << " of " << n << " multiplications");
+            break;
+        }
+    }
+}
+
+template<typename ValueType>
 void Multiplier<ValueType>::multiplyRow2(uint64_t const& rowIndex, std::vector<ValueType> const& x1, ValueType& val1, std::vector<ValueType> const& x2,
                                          ValueType& val2) const {
     multiplyRow(rowIndex, x1, val1);
@@ -99,6 +117,9 @@ std::unique_ptr<Multiplier<ValueType>> MultiplierFactory<ValueType>::create(Envi
 
     switch (type) {
         case MultiplierType::Gmmxx:
+            if constexpr (std::is_same_v<ValueType, storm::Interval>) {
+                throw storm::exceptions::NotImplementedException() << "Gmm not supported with intervals.";
+            }
             return std::make_unique<GmmxxMultiplier<ValueType>>(matrix);
         case MultiplierType::Native:
             return std::make_unique<NativeMultiplier<ValueType>>(matrix);
@@ -108,13 +129,12 @@ std::unique_ptr<Multiplier<ValueType>> MultiplierFactory<ValueType>::create(Envi
 
 template class Multiplier<double>;
 template class MultiplierFactory<double>;
-
-#ifdef STORM_HAVE_CARL
 template class Multiplier<storm::RationalNumber>;
 template class MultiplierFactory<storm::RationalNumber>;
 template class Multiplier<storm::RationalFunction>;
 template class MultiplierFactory<storm::RationalFunction>;
-#endif
+template class Multiplier<storm::Interval>;
+template class MultiplierFactory<storm::Interval>;
 
 }  // namespace solver
 }  // namespace storm

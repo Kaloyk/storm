@@ -42,12 +42,18 @@ class SparseDtmcPrctlModelChecker : public SparsePropositionalModelChecker<Spars
 
     virtual std::unique_ptr<CheckResult> computeCumulativeRewards(Environment const& env, storm::logic::RewardMeasureType rewardMeasureType,
                                                                   CheckTask<storm::logic::CumulativeRewardFormula, ValueType> const& checkTask) override;
+    virtual std::unique_ptr<CheckResult> computeDiscountedCumulativeRewards(
+        Environment const& env, storm::logic::RewardMeasureType rewardMeasureType,
+        CheckTask<storm::logic::DiscountedCumulativeRewardFormula, ValueType> const& checkTask) override;
     virtual std::unique_ptr<CheckResult> computeInstantaneousRewards(Environment const& env, storm::logic::RewardMeasureType rewardMeasureType,
                                                                      CheckTask<storm::logic::InstantaneousRewardFormula, ValueType> const& checkTask) override;
     virtual std::unique_ptr<CheckResult> computeReachabilityRewards(Environment const& env, storm::logic::RewardMeasureType rewardMeasureType,
                                                                     CheckTask<storm::logic::EventuallyFormula, ValueType> const& checkTask) override;
     virtual std::unique_ptr<CheckResult> computeTotalRewards(Environment const& env, storm::logic::RewardMeasureType rewardMeasureType,
                                                              CheckTask<storm::logic::TotalRewardFormula, ValueType> const& checkTask) override;
+    virtual std::unique_ptr<CheckResult> computeDiscountedTotalRewards(
+        Environment const& env, storm::logic::RewardMeasureType rewardMeasureType,
+        CheckTask<storm::logic::DiscountedTotalRewardFormula, ValueType> const& checkTask) override;
     virtual std::unique_ptr<CheckResult> computeConditionalRewards(Environment const& env, storm::logic::RewardMeasureType rewardMeasureType,
                                                                    CheckTask<storm::logic::ConditionalFormula, ValueType> const& checkTask) override;
     virtual std::unique_ptr<CheckResult> computeLongRunAverageRewards(

@@ -191,8 +191,8 @@ void Scheduler<ValueType>::printToStream(std::ostream& out, std::shared_ptr<stor
     }
     out << ":\n";
     STORM_LOG_WARN_COND(!(skipUniqueChoices && model == nullptr), "Can not skip unique choices if the model is not given.");
-    out << std::setw(widthOfStates) << "model state:"
-        << "    " << (isMemorylessScheduler() ? "" : " memory:     ") << "choice(s)" << (isMemorylessScheduler() ? "" : "     memory updates:     ") << '\n';
+    out << std::setw(widthOfStates) << "model state:" << "    " << (isMemorylessScheduler() ? "" : " memory:     ") << "choice(s)"
+        << (isMemorylessScheduler() ? "" : "     memory updates:     ") << '\n';
     for (uint_fast64_t state = 0; state < schedulerChoices.front().size(); ++state) {
         // Check whether the state is skipped
         if (skipUniqueChoices && model != nullptr && model->getTransitionMatrix().getRowGroupSize(state) == 1) {
@@ -378,12 +378,13 @@ void Scheduler<ValueType>::printJsonToStream(std::ostream& out, std::shared_ptr<
             output.push_back(std::move(stateChoicesJson));
         }
     }
-    out << output.dump(4);
+    out << storm::dumpJson(output);
 }
 
 template class Scheduler<double>;
 template class Scheduler<storm::RationalNumber>;
 template class Scheduler<storm::RationalFunction>;
+template class Scheduler<storm::Interval>;
 
 }  // namespace storage
 }  // namespace storm

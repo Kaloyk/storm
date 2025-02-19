@@ -37,6 +37,10 @@ class POMDPSettings : public ModuleSettings {
 
     storm::storage::PomdpMemoryPattern getMemoryPattern() const;
 
+    bool isPOMDPsolveInputSet() const;
+
+    std::string getPOMDPsolveInputFilename() const;
+
     bool check() const override;
     void finalize() override;
 

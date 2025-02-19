@@ -93,6 +93,17 @@ boost::any ExpressionSubstitutionVisitor::visit(CumulativeRewardFormula const& f
     return std::static_pointer_cast<Formula>(std::make_shared<CumulativeRewardFormula>(bounds, timeBoundReferences));
 }
 
+boost::any ExpressionSubstitutionVisitor::visit(DiscountedCumulativeRewardFormula const& f, boost::any const& data) const {
+    auto const& substitutionFunction = *boost::any_cast<std::function<storm::expressions::Expression(storm::expressions::Expression const&)> const*>(data);
+    std::vector<TimeBound> bounds;
+    std::vector<TimeBoundReference> timeBoundReferences;
+    for (uint64_t i = 0; i < f.getDimension(); ++i) {
+        bounds.emplace_back(TimeBound(f.isBoundStrict(i), substitutionFunction(f.getBound(i))));
+        timeBoundReferences.push_back(f.getTimeBoundReference(i));
+    }
+    return std::static_pointer_cast<Formula>(std::make_shared<DiscountedCumulativeRewardFormula>(f.getDiscountFactor(), bounds, timeBoundReferences));
+}
+
 boost::any ExpressionSubstitutionVisitor::visit(InstantaneousRewardFormula const& f, boost::any const& data) const {
     auto const& substitutionFunction = *boost::any_cast<std::function<storm::expressions::Expression(storm::expressions::Expression const&)> const*>(data);
     return std::static_pointer_cast<Formula>(std::make_shared<InstantaneousRewardFormula>(substitutionFunction(f.getBound()), f.getTimeBoundType()));

@@ -68,6 +68,15 @@ class BeliefExplorationPomdpModelChecker {
         Converged,
     };
 
+    struct BeliefExchange {
+        std::unordered_map<uint64_t, std::unordered_map<uint64_t, BeliefValueType>> idToBeliefMap;
+        std::unordered_map<uint64_t, ValueType> beliefIdToValueMap;
+
+        std::unordered_map<uint64_t, ValueType> beliefIdToOverApproxValueMap;
+
+        uint64_t overApproxResolution;
+    };
+
     /**
      * Struct used to store the results of the model checker
      */
@@ -137,9 +146,11 @@ class BeliefExplorationPomdpModelChecker {
      * @param result the struct to store results
      */
     void unfoldInteractively(storm::Environment const& env, std::set<uint32_t> const& targetObservations, bool min, std::optional<std::string> rewardModelName,
-                             storm::pomdp::modelchecker::POMDPValueBounds<ValueType> const& valueBounds, Result& result);
+                             storm::pomdp::modelchecker::POMDPValueBounds<ValueType> const& valueBounds, Result& result,
+                             std::optional<ValueType> discountFactor = std::nullopt);
     void unfoldInteractively(std::set<uint32_t> const& targetObservations, bool min, std::optional<std::string> rewardModelName,
-                             storm::pomdp::modelchecker::POMDPValueBounds<ValueType> const& valueBounds, Result& result);
+                             storm::pomdp::modelchecker::POMDPValueBounds<ValueType> const& valueBounds, Result& result,
+                             std::optional<ValueType> discountFactor = std::nullopt);
 
     /**
      * Pauses a running interactive unfolding
@@ -155,6 +166,15 @@ class BeliefExplorationPomdpModelChecker {
      * Terminates a running interactive unfolding. Results are computed one last time, then the interactive unfolding is terminated and cannot be continued.
      */
     void terminateUnfolding();
+
+    /**
+     * This function sets the unfolding process to a waiting state.
+     * The unfolding process is part of the interactive belief exploration in the POMDP model checker.
+     * When the unfolding process is in a waiting state, it is paused and waiting for further instructions.
+     */
+    void setUnfoldingToWait();
+
+    void pauseUnfoldingForCutOffValues();
 
     /**
      * Indicates whether there is a result after an interactive unfolding was paused.
@@ -192,13 +212,21 @@ class BeliefExplorationPomdpModelChecker {
      */
     int64_t getStatus();
 
+    void setExchangeValueForBelief(uint64_t beliefId, ValueType value);
+
+    std::unordered_map<uint64_t, std::unordered_map<uint64_t, BeliefValueType>> getExchangeBeliefMap();
+
+    std::unordered_map<uint64_t, ValueType> getExchangeValueMap();
+
+    std::unordered_map<uint64_t, ValueType> getExchangeOverApproximationMap();
+
    private:
     /* Struct Definition(s) */
 
     /**
      * Control parameters for the interactive unfolding
      */
-    enum class UnfoldingControl { Run, Pause, Terminate };
+    enum class UnfoldingControl { Run, Pause, Terminate, WaitForCutoffValues, PauseAndComputeCutoffValues };
 
     /**
      * Struct containing statistics for the belief exploration process
@@ -256,7 +284,8 @@ class BeliefExplorationPomdpModelChecker {
      * @return A struct containing the final over-approximation (overApproxValue) and under-approximation (underApproxValue) values
      */
     void refineReachability(storm::Environment const& env, std::set<uint32_t> const& targetObservations, bool min, std::optional<std::string> rewardModelName,
-                            storm::pomdp::modelchecker::POMDPValueBounds<ValueType> const& valueBounds, Result& result);
+                            storm::pomdp::modelchecker::POMDPValueBounds<ValueType> const& valueBounds, Result& result,
+                            std::optional<ValueType> discountFactor = std::nullopt);
 
     /**
      * Builds and checks an MDP that over-approximates the POMDP behavior, i.e. provides an upper bound for maximizing and a lower bound for minimizing
@@ -290,7 +319,8 @@ class BeliefExplorationPomdpModelChecker {
      */
     bool buildUnderApproximation(storm::Environment const& env, std::set<uint32_t> const& targetObservations, bool min, bool computeRewards, bool refine,
                                  HeuristicParameters const& heuristicParameters, std::shared_ptr<BeliefManagerType>& beliefManager,
-                                 std::shared_ptr<ExplorerType>& underApproximation, bool interactive);
+                                 std::shared_ptr<ExplorerType>& underApproximation, bool interactive,
+                                 std::optional<typename PomdpModelType::ValueType> discountFactor = std::nullopt);
 
     /**
      * Clips the belief with the given state ID to a belief grid by clipping its direct successor ("grid clipping")
@@ -347,6 +377,8 @@ class BeliefExplorationPomdpModelChecker {
      */
     void setUnfoldingControl(UnfoldingControl newUnfoldingControl);
 
+    BeliefMDPType triangulateBeliefWithOverApproxValues(std::unordered_map<uint64_t, BeliefValueType> const& belief, BeliefValueType const& resolution);
+
     /* Variables */
 
     Statistics statistics;
@@ -362,9 +394,13 @@ class BeliefExplorationPomdpModelChecker {
 
     std::shared_ptr<ExplorerType> interactiveUnderApproximationExplorer;
 
+    std::optional<BeliefExchange> overApproxBeliefExchange;
+
     Status unfoldingStatus;
     UnfoldingControl unfoldingControl;
     Result interactiveResult = Result(-storm::utility::infinity<ValueType>(), storm::utility::infinity<ValueType>());
+
+    BeliefExchange beliefExchange;
 };
 
 }  // namespace modelchecker

@@ -39,7 +39,7 @@ boost::any ToExpressionVisitor::visit(BinaryBooleanStateFormula const& f, boost:
     return boost::any();
 }
 
-boost::any ToExpressionVisitor::visit(BinaryBooleanPathFormula const& f, boost::any const& data) const {
+boost::any ToExpressionVisitor::visit(BinaryBooleanPathFormula const&, boost::any const&) const {
     STORM_LOG_THROW(false, storm::exceptions::InvalidOperationException, "Cannot assemble expression from formula that contains illegal elements.");
 }
 
@@ -127,7 +127,7 @@ boost::any ToExpressionVisitor::visit(UnaryBooleanStateFormula const& f, boost::
     return boost::any();
 }
 
-boost::any ToExpressionVisitor::visit(UnaryBooleanPathFormula const& f, boost::any const& data) const {
+boost::any ToExpressionVisitor::visit(UnaryBooleanPathFormula const&, boost::any const&) const {
     STORM_LOG_THROW(false, storm::exceptions::InvalidOperationException, "Cannot assemble expression from formula that contains illegal elements.");
 }
 
@@ -136,6 +136,14 @@ boost::any ToExpressionVisitor::visit(UntilFormula const&, boost::any const&) co
 }
 
 boost::any ToExpressionVisitor::visit(HOAPathFormula const&, boost::any const&) const {
+    STORM_LOG_THROW(false, storm::exceptions::InvalidOperationException, "Cannot assemble expression from formula that contains illegal elements.");
+}
+
+boost::any ToExpressionVisitor::visit(DiscountedCumulativeRewardFormula const&, boost::any const&) const {
+    STORM_LOG_THROW(false, storm::exceptions::InvalidOperationException, "Cannot assemble expression from formula that contains illegal elements.");
+}
+
+boost::any ToExpressionVisitor::visit(DiscountedTotalRewardFormula const&, boost::any const&) const {
     STORM_LOG_THROW(false, storm::exceptions::InvalidOperationException, "Cannot assemble expression from formula that contains illegal elements.");
 }
 }  // namespace logic

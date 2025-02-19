@@ -4,6 +4,7 @@
 
 #include "storm/logic/PathFormula.h"
 #include "storm/logic/RewardAccumulation.h"
+#include "storm/storage/expressions/Expression.h"
 
 namespace storm {
 namespace logic {

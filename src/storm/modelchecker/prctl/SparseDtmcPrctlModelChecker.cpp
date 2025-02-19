@@ -203,14 +203,13 @@ std::unique_ptr<CheckResult> SparseDtmcPrctlModelChecker<SparseDtmcModelType>::c
 
 template<>
 std::unique_ptr<CheckResult> SparseDtmcPrctlModelChecker<storm::models::sparse::Dtmc<storm::RationalFunction>>::computeDiscountedCumulativeRewards(
-    Environment const& env, storm::logic::RewardMeasureType,
-    CheckTask<storm::logic::DiscountedCumulativeRewardFormula, storm::RationalFunction> const& checkTask) {
+    Environment const& env, CheckTask<storm::logic::DiscountedCumulativeRewardFormula, storm::RationalFunction> const& checkTask) {
     STORM_LOG_THROW(false, storm::exceptions::NotImplementedException, "Discounted properties are not implemented for parametric models.");
 }
 
 template<typename SparseDtmcModelType>
 std::unique_ptr<CheckResult> SparseDtmcPrctlModelChecker<SparseDtmcModelType>::computeDiscountedCumulativeRewards(
-    Environment const& env, storm::logic::RewardMeasureType, CheckTask<storm::logic::DiscountedCumulativeRewardFormula, ValueType> const& checkTask) {
+    Environment const& env, CheckTask<storm::logic::DiscountedCumulativeRewardFormula, ValueType> const& checkTask) {
     storm::logic::DiscountedCumulativeRewardFormula const& rewardPathFormula = checkTask.getFormula();
     STORM_LOG_THROW(rewardPathFormula.hasIntegerBound(), storm::exceptions::InvalidPropertyException, "Formula needs to have a discrete time bound.");
     auto rewardModel = storm::utility::createFilteredRewardModel(this->getModel(), checkTask);
@@ -269,13 +268,13 @@ std::unique_ptr<CheckResult> SparseDtmcPrctlModelChecker<SparseDtmcModelType>::c
 
 template<>
 std::unique_ptr<CheckResult> SparseDtmcPrctlModelChecker<storm::models::sparse::Dtmc<storm::RationalFunction>>::computeDiscountedTotalRewards(
-    Environment const& env, storm::logic::RewardMeasureType, CheckTask<storm::logic::DiscountedTotalRewardFormula, ValueType> const& checkTask) {
+    Environment const& env, CheckTask<storm::logic::DiscountedTotalRewardFormula, ValueType> const& checkTask) {
     STORM_LOG_THROW(false, storm::exceptions::NotImplementedException, "Discounted properties are not implemented for parametric models.");
 }
 
 template<typename SparseDtmcModelType>
 std::unique_ptr<CheckResult> SparseDtmcPrctlModelChecker<SparseDtmcModelType>::computeDiscountedTotalRewards(
-    Environment const& env, storm::logic::RewardMeasureType, CheckTask<storm::logic::DiscountedTotalRewardFormula, ValueType> const& checkTask) {
+    Environment const& env, CheckTask<storm::logic::DiscountedTotalRewardFormula, ValueType> const& checkTask) {
     auto rewardModel = storm::utility::createFilteredRewardModel(this->getModel(), checkTask);
     storm::logic::DiscountedTotalRewardFormula const& rewardPathFormula = checkTask.getFormula();
     auto discountFactor = rewardPathFormula.getDiscountFactor<ValueType>();

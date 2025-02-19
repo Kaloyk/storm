@@ -2,9 +2,9 @@
 #define STORM_MODEL_CHECKER_DISCOUNTINGHELPER_H
 
 #include "SingleValueModelCheckerHelper.h"
-#include "solver/helper/ValueIterationOperator.h"
+#include "storm/solver/helper/ValueIterationOperator.h"
 #include "storm/storage/Scheduler.h"
-#include "utility/ProgressMeasurement.h"
+#include "storm/utility/ProgressMeasurement.h"
 
 namespace storm {
 class Environment;

@@ -3,7 +3,6 @@
 #include <map>
 #include <set>
 
-#include "storm/adapters/RationalFunctionAdapter.h"
 #include "storm/logic/Formulas.h"
 #include "storm/modelchecker/multiobjective/preprocessing/SparseMultiObjectiveRewardAnalysis.h"
 #include "storm/modelchecker/prctl/helper/BaierUpperRewardBoundsComputer.h"
@@ -514,7 +513,7 @@ void StandardPcaaWeightVectorChecker<SparseModelType>::unboundedIndividualPhase(
                         deterministicBackwardTransitions, storm::storage::BitVector(deterministicMatrix.getRowCount(), true), statesWithRewards);
 
                     // Compute the estimate for this objective
-                    if (!storm::utility::isZero(weightVector[objIndex])) {
+                    if (!storm::utility::isZero(weightVector[objIndex]) && !storm::utility::isZero(sumOfWeightsOfUncheckedObjectives)) {
                         objectiveResults[objIndex] = weightedSumOfUncheckedObjectives;
                         ValueType scalingFactor = storm::utility::one<ValueType>() / sumOfWeightsOfUncheckedObjectives;
                         if (storm::solver::minimize(obj.formula->getOptimalityType())) {

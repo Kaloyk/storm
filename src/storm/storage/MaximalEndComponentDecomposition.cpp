@@ -1,6 +1,6 @@
-#include <list>
-#include <numeric>
-#include <queue>
+#include <algorithm>
+#include <span>
+#include <sstream>
 
 #include "storm/models/sparse/StandardRewardModel.h"
 
@@ -74,6 +74,78 @@ MaximalEndComponentDecomposition<ValueType>& MaximalEndComponentDecomposition<Va
 }
 
 template<typename ValueType>
+std::string MaximalEndComponentDecomposition<ValueType>::statistics(uint64_t totalNumberOfStates) const {
+    if (this->empty()) {
+        return "Empty MEC decomposition.";
+    }
+    uint64_t statesInMec = 0;
+    uint64_t choicesInMec = 0;
+    uint64_t trivialMecs = 0;
+    uint64_t smallestSize = std::numeric_limits<uint64_t>::max();
+    uint64_t largestSize = 0;
+    for (auto const& mec : this->blocks) {
+        statesInMec += mec.size();
+        if (mec.size() == 1u) {
+            ++trivialMecs;
+        } else {
+            smallestSize = std::min<uint64_t>(smallestSize, mec.size());
+            largestSize = std::max<uint64_t>(largestSize, mec.size());
+        }
+    }
+    uint64_t const statesInNonTrivialMec = statesInMec - trivialMecs;
+    auto getPercentage = [&totalNumberOfStates](uint64_t states) -> double {
+        return (totalNumberOfStates == 0) ? 0.0 : (100.0 * states / totalNumberOfStates);
+    };
+    std::stringstream ss;
+    ss << "MEC decomposition statistics: ";
+    ss << "There are " << this->size() << " MECs out of which " << trivialMecs << " are trivial, i.e., consist of a single state.";
+    ss << " " << statesInMec << " out of " << totalNumberOfStates << " states (" << getPercentage(statesInMec) << "%) are on some MEC. "
+       << statesInNonTrivialMec << " states (" << getPercentage(statesInNonTrivialMec) << "%) are on a non-trivial mec. ";
+    if (largestSize > 0) {
+        ss << "The smallest non-trivial MEC has " << smallestSize << " states and the largest non-trivial MEC has " << largestSize << " states.";
+    }
+    return ss.str();
+}
+
+/*!
+ * Compute a mapping from SCC index to the set of states in that SCC.
+ * @param sccDecRes The result of the SCC decomposition.
+ * @param sccStates flattened vector that contains all states of the different SCCs
+ * @param sccIndications vector that contains the index of the first state of each SCC in the sccStates vector plus one last entry pointing to the end of the
+ * sccStates vector That means that SCC i has its states in the range [sccIndications[i], sccIndications[i+1])
+ */
+void getFlatSccDecomposition(SccDecompositionResult const& sccDecRes, std::vector<uint64_t>& sccStates, std::vector<uint64_t>& sccIndications) {
+    // initialize result vectors with correct size
+    sccIndications.assign(sccDecRes.sccCount + 1, 0ull);
+    sccStates.resize(sccDecRes.nonTrivialStates.getNumberOfSetBits());
+
+    // count the number of states in each SCC. For efficiency, we re-use storage from sccIndications but make sure that sccIndications[0]==0 remains true
+    std::span<uint64_t> sccCounts(sccIndications.begin() + 1, sccIndications.end());
+    for (auto state : sccDecRes.nonTrivialStates) {
+        ++sccCounts[sccDecRes.stateToSccMapping[state]];
+    }
+
+    // Now establish that sccCounts[i] points to the first entry in sccStates for SCC i
+    // This means that sccCounts[i] is the sum of all scc sizes for all SCCs j < i
+    uint64_t sum = 0;
+    for (auto& count : sccCounts) {
+        auto const oldSum = sum;
+        sum += count;
+        count = oldSum;
+    }
+
+    // Now fill the sccStates vector
+    for (auto state : sccDecRes.nonTrivialStates) {
+        auto const sccIndex = sccDecRes.stateToSccMapping[state];
+        sccStates[sccCounts[sccIndex]] = state;
+        ++sccCounts[sccIndex];
+    }
+
+    // At this point, sccCounts[i] points to the first entry in sccStates for SCC i+1
+    // Since sccCounts[i] = sccIndications[i+1], we are done already
+}
+
+template<typename ValueType>
 void MaximalEndComponentDecomposition<ValueType>::performMaximalEndComponentDecomposition(storm::storage::SparseMatrix<ValueType> const& transitionMatrix,
                                                                                           storm::storage::SparseMatrix<ValueType> const& backwardTransitions,
                                                                                           storm::OptionalRef<storm::storage::BitVector const> states,
@@ -96,8 +168,14 @@ void MaximalEndComponentDecomposition<ValueType>::performMaximalEndComponentDeco
         ecChoices.resize(transitionMatrix.getRowCount(), true);
     }
 
+    // Reserve storage for the mapping of SCC indices to
+    std::vector<uint64_t> ecSccStates, ecSccIndications;
+    auto getSccStates = [&ecSccStates, &ecSccIndications](uint64_t const sccIndex) {
+        return std::span(ecSccStates).subspan(ecSccIndications[sccIndex], ecSccIndications[sccIndex + 1] - ecSccIndications[sccIndex]);
+    };
     while (true) {
         performSccDecomposition(transitionMatrix, sccDecOptions, sccDecRes, sccDecCache);
+        getFlatSccDecomposition(sccDecRes, ecSccStates, ecSccIndications);
 
         remainingEcCandidates = sccDecRes.nonTrivialStates;
         storm::storage::BitVector ecSccIndices(sccDecRes.sccCount, true);
@@ -130,11 +208,7 @@ void MaximalEndComponentDecomposition<ValueType>::performMaximalEndComponentDeco
         ecSccIndices &= nonTrivSccIndices;
         for (auto sccIndex : ecSccIndices) {
             MaximalEndComponent newMec;
-            for (auto state : remainingEcCandidates) {
-                // skip states from different SCCs
-                if (sccDecRes.stateToSccMapping[state] != sccIndex) {
-                    continue;
-                }
+            for (auto const state : getSccStates(sccIndex)) {
                 // This is no longer a candidate
                 remainingEcCandidates.set(state, false);
                 // Add choices to the MEC

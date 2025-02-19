@@ -12,22 +12,22 @@
 #include <stack>
 #include <string>
 #include <vector>
-#include "adapters/RationalFunctionAdapter.h"
-#include "adapters/RationalNumberAdapter.h"
-#include "logic/UntilFormula.h"
-#include "modelchecker/CheckTask.h"
-#include "models/sparse/Dtmc.h"
-#include "models/sparse/StandardRewardModel.h"
-#include "models/sparse/StateLabeling.h"
-#include "solver/stateelimination/StateEliminator.h"
-#include "storage/BitVector.h"
-#include "storage/FlexibleSparseMatrix.h"
-#include "storage/SparseMatrix.h"
 #include "storm-pars/transformer/SparseParametricDtmcSimplifier.h"
-#include "utility/constants.h"
-#include "utility/graph.h"
-#include "utility/logging.h"
-#include "utility/macros.h"
+#include "storm/adapters/RationalFunctionAdapter.h"
+#include "storm/adapters/RationalNumberAdapter.h"
+#include "storm/logic/UntilFormula.h"
+#include "storm/modelchecker/CheckTask.h"
+#include "storm/models/sparse/Dtmc.h"
+#include "storm/models/sparse/StandardRewardModel.h"
+#include "storm/models/sparse/StateLabeling.h"
+#include "storm/solver/stateelimination/StateEliminator.h"
+#include "storm/storage/BitVector.h"
+#include "storm/storage/FlexibleSparseMatrix.h"
+#include "storm/storage/SparseMatrix.h"
+#include "storm/utility/constants.h"
+#include "storm/utility/graph.h"
+#include "storm/utility/logging.h"
+#include "storm/utility/macros.h"
 
 #define WRITE_DTMCS 0
 
@@ -151,9 +151,9 @@ models::sparse::Dtmc<RationalFunction> TimeTravelling::timeTravel(models::sparse
             newnewDTMC.addRewardModel(*stateRewardName, newRewardModel);
         }
         std::ofstream file;
-        file.open("dots/jipconvert_" + std::to_string(flexibleMatrix.getRowCount()) + ".dot");
+        storm::io::openFile("dots/jipconvert_" + std::to_string(flexibleMatrix.getRowCount()) + ".dot", file);
         newnewDTMC.writeDotToStream(file);
-        file.close();
+        storm::io::closeFile(file);
         // newnewDTMC.writeDotToStream(std::cout);
         newnewDTMC.getTransitionMatrix().isProbabilistic();
 #endif
@@ -328,9 +328,9 @@ models::sparse::Dtmc<RationalFunction> TimeTravelling::timeTravel(models::sparse
         newnewnewDTMC.addRewardModel(*stateRewardName, newRewardModel);
     }
     std::ofstream file2;
-    file2.open("dots/travel_" + std::to_string(flexibleMatrix.getRowCount()) + ".dot");
+    storm::io::openFile("dots/travel_" + std::to_string(flexibleMatrix.getRowCount()) + ".dot", file2);
     newnewnewDTMC.writeDotToStream(file2);
-    file2.close();
+    storm::io::closeFile(file2);
     newnewnewDTMC.getTransitionMatrix().isProbabilistic();
 #endif
 

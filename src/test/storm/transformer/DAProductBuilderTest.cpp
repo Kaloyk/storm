@@ -18,6 +18,9 @@
 #include <string>
 
 TEST(DAProductBuilderTest_aUb, Dtmc) {
+#ifndef STORM_HAVE_Z3
+    GTEST_SKIP() << "Z3 not available.";
+#endif
     storm::prism::Program program = storm::parser::PrismParser::parse(STORM_TEST_RESOURCES_DIR "/dtmc/die.pm");
 
     std::shared_ptr<storm::models::sparse::Model<double>> model = storm::builder::ExplicitModelBuilder<double>(program).build();
@@ -60,13 +63,15 @@ TEST(DAProductBuilderTest_aUb, Dtmc) {
     storm::transformer::DAProductBuilder productBuilder(*da, apLabels);
     auto product = productBuilder.build(*dtmc, dtmc->getInitialStates());
 
-    // std::ofstream modelDot("model.dot");
+    // std::ofstream modelDot;
+    // storm::io::openFile("model.dot", modelDot);
     // dtmc->writeDotToStream(modelDot);
-    // modelDot.close();
+    // storm::io::closeFile(modelDot);
 
-    // std::ofstream productDot("product.dot");
+    // std::ofstream productDot;
+    // storm::io::openFile("product.dot", modelDot);
     // product->getProductModel().writeDotToStream(productDot);
-    // productDot.close();
+    // storm::io::closeFile(productDot);
 
     // product->printMapping(std::cout);
 
@@ -84,6 +89,9 @@ TEST(DAProductBuilderTest_aUb, Dtmc) {
 }
 
 TEST(DAProductBuilderTest_aWb, Dtmc) {
+#ifndef STORM_HAVE_Z3
+    GTEST_SKIP() << "Z3 not available.";
+#endif
     storm::prism::Program program = storm::parser::PrismParser::parse(STORM_TEST_RESOURCES_DIR "/dtmc/die.pm");
 
     std::shared_ptr<storm::models::sparse::Model<double>> model = storm::builder::ExplicitModelBuilder<double>(program).build();

@@ -48,8 +48,8 @@ namespace helper {
 
 template<>
 std::map<storm::storage::sparse::state_type, storm::RationalFunction> SparseDtmcPrctlHelper<storm::RationalFunction>::computeRewardBoundedValues(
-    Environment const& env, storm::models::sparse::Dtmc<storm::RationalFunction> const& model,
-    std::shared_ptr<storm::logic::OperatorFormula const> rewardBoundedFormula) {
+    Environment const& /*env*/, storm::models::sparse::Dtmc<storm::RationalFunction> const& /*model*/,
+    std::shared_ptr<storm::logic::OperatorFormula const> /*rewardBoundedFormula*/) {
     STORM_LOG_THROW(false, storm::exceptions::NotSupportedException, "The specified property is not supported by this value type.");
     return std::map<storm::storage::sparse::state_type, storm::RationalFunction>();
 }
@@ -127,7 +127,7 @@ std::map<storm::storage::sparse::state_type, ValueType> SparseDtmcPrctlHelper<Va
             headers.push_back(rewardUnfolding.getDimension(i).formula->toString());
         }
         headers.push_back("Result");
-        storm::utility::exportDataToCSVFile<ValueType, std::string, std::string>(
+        storm::io::exportDataToCSVFile<ValueType, std::string, std::string>(
             storm::settings::getModule<storm::settings::modules::IOSettings>().getExportCdfDirectory() + "cdf.csv", cdfData, headers);
     }
 
@@ -486,9 +486,9 @@ std::vector<ValueType> computeUpperRewardBounds(storm::storage::SparseMatrix<Val
 }
 
 template<>
-std::vector<storm::RationalFunction> computeUpperRewardBounds(storm::storage::SparseMatrix<storm::RationalFunction> const& transitionMatrix,
-                                                              std::vector<storm::RationalFunction> const& rewards,
-                                                              std::vector<storm::RationalFunction> const& oneStepTargetProbabilities) {
+std::vector<storm::RationalFunction> computeUpperRewardBounds(storm::storage::SparseMatrix<storm::RationalFunction> const& /*transitionMatrix*/,
+                                                              std::vector<storm::RationalFunction> const& /*rewards*/,
+                                                              std::vector<storm::RationalFunction> const& /*oneStepTargetProbabilities*/) {
     STORM_LOG_THROW(false, storm::exceptions::NotSupportedException, "Computing upper reward bounds is not supported for rational functions.");
 }
 

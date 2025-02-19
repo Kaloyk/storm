@@ -1,5 +1,4 @@
-#ifndef STORM_LOGIC_FRAGMENTSPECIFICATION_H_
-#define STORM_LOGIC_FRAGMENTSPECIFICATION_H_
+#pragma once
 
 #include <map>
 #include <string>
@@ -139,9 +138,6 @@ class FragmentSpecification {
     bool areMultiDimensionalCumulativeRewardFormulasAllowed() const;
     FragmentSpecification& setMultiDimensionalCumulativeRewardFormulasAllowed(bool newValue);
 
-    bool isVarianceMeasureTypeAllowed() const;
-    FragmentSpecification& setVarianceMeasureTypeAllowed(bool newValue);
-
     bool areQuantitativeOperatorResultsAllowed() const;
     FragmentSpecification& setQuantitativeOperatorResultsAllowed(bool newValue);
 
@@ -228,7 +224,6 @@ class FragmentSpecification {
     bool timeBoundedCumulativeRewardFormulas;
     bool rewardBoundedCumulativeRewardFormulas;
     bool multiDimensionalCumulativeRewardFormulas;
-    bool varianceAsMeasureType;
     bool quantitativeOperatorResults;
     bool qualitativeOperatorResults;
     bool operatorAtTopLevelRequired;
@@ -288,5 +283,3 @@ FragmentSpecification quantiles();
 
 }  // namespace logic
 }  // namespace storm
-
-#endif /* STORM_LOGIC_FRAGMENTSPECIFICATION_H_ */

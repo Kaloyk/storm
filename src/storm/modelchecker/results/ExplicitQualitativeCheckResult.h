@@ -1,12 +1,11 @@
-#ifndef STORM_MODELCHECKER_EXPLICITQUALITATIVECHECKRESULT_H_
-#define STORM_MODELCHECKER_EXPLICITQUALITATIVECHECKRESULT_H_
-
+#pragma once
 #include <boost/variant.hpp>
 #include <functional>
 #include <map>
 #include <optional>
 
 #include "storm/adapters/JsonForward.h"
+#include "storm/adapters/RationalNumberAdapter.h"
 #include "storm/modelchecker/results/QualitativeCheckResult.h"
 #include "storm/models/sparse/StateLabeling.h"
 #include "storm/storage/BitVector.h"
@@ -64,7 +63,7 @@ class ExplicitQualitativeCheckResult : public QualitativeCheckResult {
 
     virtual void filter(QualitativeCheckResult const& filter) override;
 
-    template<typename JsonRationalType = storm::RationalNumber>
+    template<typename JsonRationalType>
     storm::json<JsonRationalType> toJson(std::optional<storm::storage::sparse::StateValuations> const& stateValuations = std::nullopt,
                                          std::optional<storm::models::sparse::StateLabeling> const& stateLabels = std::nullopt) const;
 
@@ -76,5 +75,3 @@ class ExplicitQualitativeCheckResult : public QualitativeCheckResult {
 };
 }  // namespace modelchecker
 }  // namespace storm
-
-#endif /* STORM_MODELCHECKER_EXPLICITQUALITATIVECHECKRESULT_H_ */

@@ -80,10 +80,10 @@ class SparseMdpPrctlHelper {
                                                                         RewardModelType const& rewardModel, uint_fast64_t stepBound, ValueType discountFactor);
 
     template<typename RewardModelType>
-    static MDPSparseModelCheckingHelperReturnType<SolutionType> computeDiscountedTotalRewards(
-        Environment const& env, storm::solver::SolveGoal<ValueType, SolutionType>&& goal, storm::storage::SparseMatrix<ValueType> const& transitionMatrix,
-        storm::storage::SparseMatrix<ValueType> const& backwardTransitions, RewardModelType const& rewardModel, bool qualitative, bool produceScheduler,
-        ValueType discountFactor, ModelCheckerHint const& hint = ModelCheckerHint());
+        static MDPSparseModelCheckingHelperReturnType<SolutionType> computeDiscountedTotalRewards(
+            Environment const& env, storm::solver::SolveGoal<ValueType, SolutionType>&& goal, storm::storage::SparseMatrix<ValueType> const& transitionMatrix,
+            storm::storage::SparseMatrix<ValueType> const& backwardTransitions, RewardModelType const& rewardModel, bool qualitative, bool produceScheduler,
+            ValueType discountFactor, ModelCheckerHint const& hint = ModelCheckerHint());
 
     template<typename RewardModelType>
     static MDPSparseModelCheckingHelperReturnType<SolutionType> computeReachabilityRewards(

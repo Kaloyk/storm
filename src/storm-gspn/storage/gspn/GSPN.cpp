@@ -1,4 +1,4 @@
-#include "GSPN.h"
+#include "storm-gspn/storage/gspn/GSPN.h"
 
 #include <unordered_map>
 
@@ -260,17 +260,17 @@ bool GSPN::testPlaces() const {
 
     for (auto const& place : this->getPlaces()) {
         if (std::find(namesOfPlaces.begin(), namesOfPlaces.end(), place.getName()) != namesOfPlaces.end()) {
-            STORM_PRINT_AND_LOG("duplicates states with the name \"" + place.getName() + "\"\n")
+            STORM_PRINT_AND_LOG("duplicates states with the name \"" + place.getName() + "\"\n");
             result = false;
         }
 
         if (std::find(idsOfPlaces.begin(), idsOfPlaces.end(), place.getID()) != idsOfPlaces.end()) {
-            STORM_PRINT_AND_LOG("duplicates states with the id \"" + boost::lexical_cast<std::string>(place.getID()) + "\"\n")
+            STORM_PRINT_AND_LOG("duplicates states with the id \"" + boost::lexical_cast<std::string>(place.getID()) + "\"\n");
             result = false;
         }
 
         if (place.getNumberOfInitialTokens() > place.getNumberOfInitialTokens()) {
-            STORM_PRINT_AND_LOG("number of initial tokens is greater than the capacity for place \"" + place.getName() + "\"\n")
+            STORM_PRINT_AND_LOG("number of initial tokens is greater than the capacity for place \"" + place.getName() + "\"\n");
             result = false;
         }
     }

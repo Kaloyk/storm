@@ -1,10 +1,10 @@
 #pragma once
+#include <sstream>
 #include <string>
 #include <vector>
-#include <sstream>
 
 // Utility function to split a string based on a delimiter
-inline std::vector<std::string> split(const std::string &s, char delimiter) {
+inline std::vector<std::string> split(const std::string& s, char delimiter) {
     std::vector<std::string> tokens;
     std::string token;
     std::istringstream tokenStream(s);
@@ -29,4 +29,29 @@ ValueType convertToValueType(const std::string& s) {
         throw std::runtime_error("Conversion error: cannot convert \"" + s + "\" to the desired numeric type.");
     }
     return val;
+}
+
+void parseIdentifierVector(std::istringstream& iss, std::vector<std::string>& vec, const std::string& identifierName) {
+    std::string token;
+    if (!(iss >> token))
+        return;
+
+    // Check if the token is composed only of digits.
+    bool is_number = !token.empty() && std::all_of(token.begin(), token.end(), ::isdigit);
+
+    if (is_number) {
+        int count = std::stoi(token);
+        for (int i = 0; i < count; i++) {
+            vec.push_back(std::to_string(i));
+        }
+        std::cout << "Parsed " << identifierName << " count: " << token << "\n";
+    } else {
+        // The token is not a number, so treat it as the first identifier.
+        vec.push_back(trim(token));
+        std::cout << "Parsed " << identifierName << ": " << token << "\n";
+        while (iss >> token) {
+            vec.push_back(trim(token));
+            std::cout << "Parsed " << identifierName << ": " << token << "\n";
+        }
+    }
 }

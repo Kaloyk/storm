@@ -21,6 +21,11 @@ std::string trim(const std::string& str) {
     return (first == std::string::npos || last == std::string::npos) ? "" : str.substr(first, last - first + 1);
 }
 
+inline bool isIgnoredLine(const std::string& line) {
+    std::string trimmed = trim(line);
+    return (trimmed.empty() || trimmed[0] == '#');
+}
+
 template<typename ValueType>
 ValueType convertToValueType(const std::string& s) {
     std::istringstream iss(s);
@@ -54,4 +59,30 @@ void parseIdentifierVector(std::istringstream& iss, std::vector<std::string>& ve
             std::cout << "Parsed " << identifierName << ": " << token << "\n";
         }
     }
+}
+
+template<typename ValueType>
+std::vector<ValueType> readArrayTokens(std::istringstream& iss, std::ifstream& infile) {
+    std::vector<ValueType> values;
+    std::string token;
+
+    //try reading first line
+    while (iss >> token) {
+        values.push_back(convertToValueType<ValueType>(token));
+    }
+
+    //if empty try reading next non-empty line
+    if (values.empty()) {
+        std::string line;
+        while (std::getline(infile, line)) {
+            if (!isIgnoredLine(line)) {
+                std::istringstream newIss(line);
+                while (newIss >> token) {
+                    values.push_back(convertToValueType<ValueType>(token));
+                }
+                break;
+            }
+        }
+    }
+    return values;
 }

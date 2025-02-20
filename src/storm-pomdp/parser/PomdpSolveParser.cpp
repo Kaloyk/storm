@@ -32,11 +32,6 @@ struct POMDPcomponents {
     ValueType discount = storm::utility::one<ValueType>();
 };
 
-inline bool isIgnoredLine(const std::string& line) {
-    std::string trimmed = trim(line);
-    return (trimmed.empty() || trimmed[0] == '#');
-}
-
 template<typename ValueType>
 POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
     POMDPcomponents<ValueType> pomdp;
@@ -49,7 +44,6 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
     STORM_PRINT("Starting to parse file");
 
     while (std::getline(infile, line)) {
-        // Skip blank or comment lines.
         if (isIgnoredLine(line))
             continue;
 
@@ -75,70 +69,69 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
             parseIdentifierVector(iss, pomdp.observations, "observation");
         } else if (word == "start:") {
             STORM_PRINT("Parsing start probabilities");
-            std::string token;
-            while (iss >> token) {
-                ValueType prob = convertToValueType<ValueType>(token);
-                pomdp.start_probabilities.push_back(prob);
-            }
+            std::vector<ValueType> startProbs = readArrayTokens<ValueType>(iss, infile);
+            pomdp.start_probabilities.insert(pomdp.start_probabilities.end(), startProbs.begin(), startProbs.end());
         } else if (word == "T:") {
             STORM_PRINT("Parsing transition(s)");
-            std::string action, start_state, end_state;
-            std::vector<ValueType> probabilities;
 
-            std::getline(iss, word, ':');
-            if (iss.peek() == ':') {
-                std::getline(iss, action, ':');
+            std::string rest;
+            std::getline(iss, rest);
+            rest = trim(rest);
+            int colonCount = std::count(rest.begin(), rest.end(), ':');
+            if (colonCount >= 2) {
+                // <action> : <start-state> : <end-state> <probability>
+                std::istringstream restStream(rest);
+                std::string action, start_state, remainder;
+                std::getline(restStream, action, ':');
                 action = trim(action);
-                if (iss.peek() == ':') {
-                    // Single Transition Probability:
-                    // Format: T: <action> : <start-state> : <end-state> %f
-                    std::getline(iss, start_state, ':');
-                    std::getline(iss, end_state);
-                    std::string token;
-                    iss >> token;
-                    ValueType probability = convertToValueType<ValueType>(token);
-                    start_state = trim(start_state);
-                    end_state = trim(end_state);
-                    if (probability != storm::utility::zero<ValueType>()) {
+                std::getline(restStream, start_state, ':');
+                start_state = trim(start_state);
+                std::getline(restStream, remainder);
+                remainder = trim(remainder);
+                // <end_state> <probability>
+                std::istringstream remainderStream(remainder);
+                std::string end_state, probability_token;
+                remainderStream >> end_state >> probability_token;
+                ValueType probability = convertToValueType<ValueType>(probability_token);
+                end_state = trim(end_state);
+
+                if (probability != storm::utility::zero<ValueType>()) {
+                    if (action == "*") {
+                        for (const auto& act : pomdp.actions) {
+                            pomdp.transitions[act][start_state + ":" + end_state] = probability;
+                        }
+                    } else if (start_state == "*") {
+                        for (const auto& state : pomdp.states) {
+                            pomdp.transitions[action][state + ":" + end_state] = probability;
+                        }
+                    } else {
+                        pomdp.transitions[action][start_state + ":" + end_state] = probability;
+                    }
+                }
+            } else if (colonCount == 1) {
+                // <action> : <start-state> <p1> <p2> ... <pN>
+                std::istringstream restStream(rest);
+                std::string action, start_state;
+                std::getline(restStream, action, ':');
+                action = trim(action);
+                restStream >> start_state;
+                start_state = trim(start_state);
+
+                std::vector<ValueType> probabilities = readArrayTokens<ValueType>(restStream, infile);
+                for (uint64_t i = 0; i < pomdp.states.size(); i++) {
+                    if (probabilities[i] != storm::utility::zero<ValueType>()) {
                         if (action == "*") {
                             for (const auto& act : pomdp.actions) {
-                                pomdp.transitions[act][start_state + ":" + end_state] = probability;
-                            }
-                        } else if (start_state == "*") {
-                            for (const auto& state : pomdp.states) {
-                                pomdp.transitions[action][state + ":" + end_state] = probability;
+                                pomdp.transitions[act][start_state + ":" + pomdp.states[i]] = probabilities[i];
                             }
                         } else {
-                            pomdp.transitions[action][start_state + ":" + end_state] = probability;
-                        }
-                    }
-                } else {
-                    // Single Row of Transition Matrix:
-                    // Format: T: <action> : <start-state> %f %f ... %f
-                    std::getline(iss, action, ':');
-                    action = trim(action);
-                    iss >> start_state;
-                    start_state = trim(start_state);
-                    std::string token;
-                    while (iss >> token) {
-                        probabilities.push_back(convertToValueType<ValueType>(token));
-                    }
-                    for (uint64_t i = 0; i < pomdp.states.size(); i++) {
-                        if (probabilities[i] != storm::utility::zero<ValueType>()) {
-                            if (action == "*") {
-                                for (const auto& act : pomdp.actions) {
-                                    pomdp.transitions[act][start_state + ":" + pomdp.states[i]] = probabilities[i];
-                                }
-                            } else {
-                                pomdp.transitions[action][start_state + ":" + pomdp.states[i]] = probabilities[i];
-                            }
+                            pomdp.transitions[action][start_state + ":" + pomdp.states[i]] = probabilities[i];
                         }
                     }
                 }
             } else {
-                // Entire Transition Matrix for an Action:
-                // Format: T: <action>
-                action = trim(line.substr(3));
+                // T: <action>
+                std::string action = trim(rest);
                 for (uint64_t i = 0; i < pomdp.states.size(); i++) {
                     std::getline(infile, line);
                     if (isIgnoredLine(line))
@@ -162,60 +155,65 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
             }
         } else if (word == "O:") {
             STORM_PRINT("Parsing observation probabilities");
-            std::string action, end_state, observation;
-            std::vector<ValueType> probabilities;
-            std::getline(iss, word, ':');
-            if (iss.peek() == ':') {
-                std::getline(iss, action, ':');
+
+            std::string rest;
+            std::getline(iss, rest);
+            rest = trim(rest);
+            int colonCount = std::count(rest.begin(), rest.end(), ':');
+            if (colonCount >= 2) {
+                //<action> : <end-state> : <observation> <probability>
+                std::istringstream restStream(rest);
+                std::string action, end_state, remainder;
+                std::getline(restStream, action, ':');
                 action = trim(action);
-                if (iss.peek() == ':') {
-                    // Single Observation Probability:
-                    // Format: O: <action> : <end-state> : <observation> %f
-                    std::getline(iss, end_state, ':');
-                    std::getline(iss, observation);
-                    std::string token;
-                    iss >> token;
-                    ValueType probability = convertToValueType<ValueType>(token);
-                    end_state = trim(end_state);
-                    observation = trim(observation);
-                    if (probability != storm::utility::zero<ValueType>()) {
+                std::getline(restStream, end_state, ':');
+                end_state = trim(end_state);
+                std::getline(restStream, remainder);
+                remainder = trim(remainder);
+                //<observation> <probability>
+                std::istringstream remainderStream(remainder);
+                std::string observation, probability_token;
+                remainderStream >> observation >> probability_token;
+                ValueType probability = convertToValueType<ValueType>(probability_token);
+                observation = trim(observation);
+
+                if (probability != storm::utility::zero<ValueType>()) {
+                    if (action == "*") {
+                        for (const auto& act : pomdp.actions) {
+                            pomdp.observations_prob[act][end_state + ":" + observation] = probability;
+                        }
+                    } else if (end_state == "*") {
+                        for (const auto& state : pomdp.states) {
+                            pomdp.observations_prob[action][state + ":" + observation] = probability;
+                        }
+                    } else {
+                        pomdp.observations_prob[action][end_state + ":" + observation] = probability;
+                    }
+                }
+            } else if (rest.find(':') != std::string::npos) {
+                // <action> : <end-state> <p1> <p2> ... <pN>
+                std::istringstream restStream(rest);
+                std::string action, end_state;
+                std::getline(restStream, action, ':');
+                action = trim(action);
+                restStream >> end_state;
+                end_state = trim(end_state);
+                std::vector<ValueType> probabilities = readArrayTokens<ValueType>(restStream, infile);
+
+                for (uint64_t i = 0; i < pomdp.observations.size(); i++) {
+                    if (probabilities[i] != storm::utility::zero<ValueType>()) {
                         if (action == "*") {
                             for (const auto& act : pomdp.actions) {
-                                pomdp.observations_prob[act][end_state + ":" + observation] = probability;
-                            }
-                        } else if (end_state == "*") {
-                            for (const auto& state : pomdp.states) {
-                                pomdp.observations_prob[action][state + ":" + observation] = probability;
+                                pomdp.observations_prob[act][end_state + ":" + pomdp.observations[i]] = probabilities[i];
                             }
                         } else {
-                            pomdp.observations_prob[action][end_state + ":" + observation] = probability;
-                        }
-                    }
-                } else {
-                    // Single Row of Observation Matrix:
-                    // Format: O: <action> : <end-state> %f %f ... %f
-                    std::getline(iss, end_state);
-                    end_state = trim(end_state);
-                    std::string token;
-                    while (iss >> token) {
-                        probabilities.push_back(convertToValueType<ValueType>(token));
-                    }
-                    for (uint64_t i = 0; i < pomdp.observations.size(); i++) {
-                        if (probabilities[i] != storm::utility::zero<ValueType>()) {
-                            if (action == "*") {
-                                for (const auto& act : pomdp.actions) {
-                                    pomdp.observations_prob[act][end_state + ":" + pomdp.observations[i]] = probabilities[i];
-                                }
-                            } else {
-                                pomdp.observations_prob[action][end_state + ":" + pomdp.observations[i]] = probabilities[i];
-                            }
+                            pomdp.observations_prob[action][end_state + ":" + pomdp.observations[i]] = probabilities[i];
                         }
                     }
                 }
             } else {
-                // Entire Observation Matrix for an Action:
-                // Format: O: <action>
-                action = trim(line.substr(3));
+                // O: <action>
+                std::string action = trim(rest);
                 for (uint64_t i = 0; i < pomdp.states.size(); i++) {
                     std::getline(infile, line);
                     if (isIgnoredLine(line))
@@ -239,40 +237,29 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
             }
         } else if (word == "R:") {
             STORM_PRINT("Parsing rewards");
-
             std::string headerLine;
             std::getline(iss, headerLine);
             headerLine = trim(headerLine);
-
-            // Count the number of colons in the header to determine the format.
             size_t colonCount = std::count(headerLine.begin(), headerLine.end(), ':');
 
-            // CASE 1: Immediate Reward format:
-            // Format: R: <action> : <start-state> : <end-state> : <observation> <reward_value>
-            if (colonCount == 3) {
-                std::vector<std::string> tokens;
-                std::istringstream hss(headerLine);
-                std::string token;
-                while (std::getline(hss, token, ':')) {
-                    tokens.push_back(trim(token));
-                }
-                if (tokens.size() != 4) {
-                    throw std::runtime_error("Expected 4 tokens in immediate reward header, got " + std::to_string(tokens.size()));
-                }
-                std::string action = tokens[0];
-                std::string start_state = tokens[1];
-                std::string end_state = tokens[2];
-
-                std::istringstream obsRewardStream(tokens[3]);
-                std::string observation;
-                if (!(obsRewardStream >> observation)) {
-                    throw std::runtime_error("Conversion error: cannot read observation from token \"" + tokens[3] + "\"");
-                }
-                std::string rewardStr;
-                if (!(obsRewardStream >> rewardStr)) {
-                    throw std::runtime_error("Conversion error: cannot read reward value from token \"" + tokens[3] + "\"");
-                }
+            // <action> : <start-state> : <end-state> : <observation> <reward_value>
+            if (colonCount >= 3) {
+                std::istringstream headerStream(headerLine);
+                std::string action, start_state, end_state, remainder;
+                std::getline(headerStream, action, ':');
+                action = trim(action);
+                std::getline(headerStream, start_state, ':');
+                start_state = trim(start_state);
+                std::getline(headerStream, end_state, ':');
+                end_state = trim(end_state);
+                std::getline(headerStream, remainder);
+                remainder = trim(remainder);
+                // <observation> <reward_value>
+                std::istringstream remainderStream(remainder);
+                std::string observation, rewardStr;
+                remainderStream >> observation >> rewardStr;
                 ValueType rewardVal = convertToValueType<ValueType>(rewardStr);
+                observation = trim(observation);
 
                 if (rewardVal != storm::utility::zero<ValueType>()) {
                     if (action == "*") {
@@ -296,8 +283,7 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                     }
                 }
             }
-            // CASE 2: Row Reward Matrix format:
-            // Format: R: <action> : <start-state> : <end-state> <token> <token> ... <token>
+            // R: <action> : <start-state> : <end-state> <token> <token> ... <token>
             else if (colonCount == 2) {
                 std::istringstream headerStream(headerLine);
                 std::string action, start_state, end_state;
@@ -307,11 +293,8 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                 action = trim(action);
                 start_state = trim(start_state);
                 end_state = trim(end_state);
-                std::vector<ValueType> rewardsVec;
-                std::string token;
-                while (headerStream >> token) {
-                    rewardsVec.push_back(convertToValueType<ValueType>(token));
-                }
+                std::vector<ValueType> rewardsVec = readArrayTokens<ValueType>(headerStream, infile);
+
                 if (start_state == "*") {
                     for (const auto& s : pomdp.states) {
                         if (end_state == "*") {
@@ -356,8 +339,7 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                     }
                 }
             }
-            // CASE 3: Full Reward Matrix format:
-            // Format: R: <action> : <start-state>
+            // <action> : <start-state>
             else if (colonCount == 1) {
                 std::istringstream headerStream(headerLine);
                 std::string action, start_state;

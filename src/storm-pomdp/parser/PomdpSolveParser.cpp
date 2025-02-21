@@ -394,19 +394,10 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
 template<typename ValueType>
 storm::storage::SparseMatrix<ValueType> buildTransitionMatrix(const std::unordered_map<std::string, std::unordered_map<std::string, ValueType>>& newTransitions,
                                                               const std::vector<std::string>& newStates, const std::vector<std::string>& actions) {
-    STORM_PRINT("Line 232");
-    // Number of columns = number of states.
+    STORM_PRINT("Building transition matrix");
+
     uint64_t numStates = newStates.size();
-
-    uint64_t numChoices = 0;
-    for (const auto& state : newStates) {
-        if (state == "initial")
-            numChoices += 1;
-        else
-            numChoices += (actions.size() - 1);
-    }
-
-    STORM_PRINT("Line 237");
+    uint64_t numChoices = newStates.size() * actions.size();
 
     std::unordered_map<std::string, uint64_t> stateIndices;
     uint64_t index = 0;
@@ -414,77 +405,46 @@ storm::storage::SparseMatrix<ValueType> buildTransitionMatrix(const std::unorder
         stateIndices[state] = index++;
     }
 
-    STORM_PRINT("Line 244");
     uint64_t entryCount = 0;
     for (const auto& [startState, actionMap] : newTransitions) {
         entryCount += actionMap.size();
     }
 
-    STORM_PRINT("Line 251");
     storm::storage::SparseMatrixBuilder<ValueType> builder(numChoices,  // number of rows (each valid state-action pair)
                                                            numStates,   // number of columns (states)
-                                                           entryCount,  // number of nonzero entries (upper bound)
+                                                           entryCount,  // upper bound on nonzero entries
                                                            true,        // forceDimensions
                                                            true,        // hasCustomRowGrouping
                                                            numStates    // number of row groups (one per state)
     );
 
-    STORM_PRINT("Line 262");
     uint64_t rowIndex = 0;
     for (const auto& state : newStates) {
         uint64_t rowGroupStart = rowIndex;
         builder.newRowGroup(rowGroupStart);
 
-        if (state == "initial") {
-            // For "initial", only allow the "start" action.
+        for (const auto& action : actions) {
             if (newTransitions.find(state) != newTransitions.end()) {
                 const auto& actionMap = newTransitions.at(state);
                 for (const auto& [actionEndState, probability] : actionMap) {
                     auto pos = actionEndState.find(':');
-                    if (pos == std::string::npos) {
+                    if (pos == std::string::npos)
                         throw std::runtime_error("Invalid action:endState format: " + actionEndState);
-                    }
                     std::string transitionAction = actionEndState.substr(0, pos);
-                    if (transitionAction == "start") {
+                    if (transitionAction == action) {
                         std::string endState = actionEndState.substr(pos + 1);
-                        if (stateIndices.find(endState) == stateIndices.end()) {
+                        if (stateIndices.find(endState) == stateIndices.end())
                             throw std::runtime_error("EndState not found in newStates: " + endState);
-                        }
                         uint64_t colIndex = stateIndices[endState];
                         builder.addNextValue(rowIndex, colIndex, probability);
                     }
                 }
             }
-            rowIndex += 1;
-        } else {
-            // For non-initial states, process all actions except "start".
-            for (const auto& action : actions) {
-                if (action == "start")
-                    continue;
-                if (newTransitions.find(state) != newTransitions.end()) {
-                    const auto& actionMap = newTransitions.at(state);
-                    for (const auto& [actionEndState, probability] : actionMap) {
-                        auto pos = actionEndState.find(':');
-                        if (pos == std::string::npos) {
-                            throw std::runtime_error("Invalid action:endState format: " + actionEndState);
-                        }
-                        std::string transitionAction = actionEndState.substr(0, pos);
-                        if (transitionAction == action) {
-                            std::string endState = actionEndState.substr(pos + 1);
-                            if (stateIndices.find(endState) == stateIndices.end()) {
-                                throw std::runtime_error("EndState not found in newStates: " + endState);
-                            }
-                            uint64_t colIndex = stateIndices[endState];
-                            builder.addNextValue(rowIndex, colIndex, probability);
-                        }
-                    }
-                }
-                rowIndex++;
-            }
+            rowIndex++;
         }
     }
 
-    STORM_PRINT("Line 296");
+    STORM_PRINT("Transition matrix built");
     return builder.build();
 }
 
@@ -494,14 +454,7 @@ storm::storage::SparseMatrix<ValueType> buildRewardMatrix(const std::unordered_m
     STORM_PRINT("Building reward matrix");
 
     uint64_t numStates = newStates.size();
-
-    uint64_t numChoices = 0;
-    for (const auto& state : newStates) {
-        if (state == "initial")
-            numChoices += 1;
-        else
-            numChoices += (actions.size() - 1);
-    }
+    uint64_t numChoices = newStates.size() * actions.size();
 
     std::unordered_map<std::string, uint64_t> stateIndices;
     uint64_t index = 0;
@@ -526,9 +479,7 @@ storm::storage::SparseMatrix<ValueType> buildRewardMatrix(const std::unordered_m
     for (const auto& state : newStates) {
         uint64_t rowGroupStart = rowIndex;
         builder.newRowGroup(rowGroupStart);
-
-        if (state == "initial") {
-            // For the initial state, only allow the "start" action.
+        for (const auto& action : actions) {
             if (rewards.find(state) != rewards.end()) {
                 const auto& rewardMap = rewards.at(state);
                 for (const auto& [rewardKey, rewardValue] : rewardMap) {
@@ -536,7 +487,7 @@ storm::storage::SparseMatrix<ValueType> buildRewardMatrix(const std::unordered_m
                     if (pos == std::string::npos)
                         throw std::runtime_error("Invalid reward key format: " + rewardKey);
                     std::string rewardAction = rewardKey.substr(0, pos);
-                    if (rewardAction == "start") {
+                    if (rewardAction == action) {
                         std::string targetState = rewardKey.substr(pos + 1);
                         if (stateIndices.find(targetState) == stateIndices.end())
                             throw std::runtime_error("Target state not found in newStates: " + targetState);
@@ -545,30 +496,7 @@ storm::storage::SparseMatrix<ValueType> buildRewardMatrix(const std::unordered_m
                     }
                 }
             }
-            rowIndex += 1;
-        } else {
-            // For non‑initial states, process all actions except "start".
-            for (const auto& action : actions) {
-                if (action == "start")
-                    continue;  // Skip "start" for non‑initial states.
-                if (rewards.find(state) != rewards.end()) {
-                    const auto& rewardMap = rewards.at(state);
-                    for (const auto& [rewardKey, rewardValue] : rewardMap) {
-                        auto pos = rewardKey.find(':');
-                        if (pos == std::string::npos)
-                            throw std::runtime_error("Invalid reward key format: " + rewardKey);
-                        std::string rewardAction = rewardKey.substr(0, pos);
-                        if (rewardAction == action) {
-                            std::string targetState = rewardKey.substr(pos + 1);
-                            if (stateIndices.find(targetState) == stateIndices.end())
-                                throw std::runtime_error("Target state not found in newStates: " + targetState);
-                            uint64_t colIndex = stateIndices[targetState];
-                            builder.addNextValue(rowIndex, colIndex, rewardValue);
-                        }
-                    }
-                }
-                rowIndex++;
-            }
+            rowIndex++;
         }
     }
 
@@ -829,10 +757,10 @@ PomdpSolveParserResult<ValueType> PomdpSolveParser<ValueType>::parsePomdpSolveFi
     auto modelPtr = new_pomdp->template as<storm::models::sparse::Model<ValueType>>();
     storm::api::exportSparseModelAsDot(modelPtr, outputFilePath);
 
-    STORM_PRINT("LINIE 552");
     ValueType discountFactor = static_cast<ValueType>(pomdp.discount);
 
     PomdpSolveParserResult<ValueType> result;
+    new_pomdp->setIsCanonic();
     result.pomdp = new_pomdp;
     result.discountFactor = discountFactor;
     return result;

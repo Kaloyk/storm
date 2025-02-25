@@ -1,8 +1,8 @@
 #include "DiscountingHelper.h"
-#include "exceptions/IllegalFunctionCallException.h"
-#include "solver/helper/DiscountedValueIterationHelper.h"
-#include "solver/helper/SchedulerTrackingHelper.h"
 #include "storm/environment/solver/MinMaxSolverEnvironment.h"
+#include "storm/exceptions/IllegalFunctionCallException.h"
+#include "storm/solver/helper/DiscountedValueIterationHelper.h"
+#include "storm/solver/helper/SchedulerTrackingHelper.h"
 #include "storm/storage/SparseMatrix.h"
 
 namespace storm {

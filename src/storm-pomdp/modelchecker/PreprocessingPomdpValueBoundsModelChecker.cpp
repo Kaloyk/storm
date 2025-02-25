@@ -1,4 +1,4 @@
-#include "PreprocessingPomdpValueBoundsModelChecker.h"
+#include "storm-pomdp/modelchecker/PreprocessingPomdpValueBoundsModelChecker.h"
 #include <random>
 
 #include "storm-pomdp/storage/PomdpMemory.h"
@@ -7,7 +7,7 @@
 #include "storm/modelchecker/results/ExplicitQuantitativeCheckResult.h"
 #include "storm/storage/Scheduler.h"
 
-#include "environment/Environment.h"
+#include "storm/environment/Environment.h"
 #include "storm/exceptions/NotSupportedException.h"
 #include "storm/exceptions/UnexpectedException.h"
 #include "storm/utility/macros.h"
@@ -150,7 +150,7 @@ std::pair<std::vector<ValueType>, storm::storage::Scheduler<ValueType>> Preproce
 }
 
 template<typename ValueType>
-std::pair<std::vector<ValueType>, storm::storage::Scheduler<ValueType>>
+[[maybe_unused]] std::pair<std::vector<ValueType>, storm::storage::Scheduler<ValueType>>
 PreprocessingPomdpValueBoundsModelChecker<ValueType>::computeValuesForRandomMemorylessPolicy(
     storm::Environment const& env, storm::logic::Formula const& formula, storm::pomdp::analysis::FormulaInformation const& info,
     std::shared_ptr<storm::models::sparse::Mdp<ValueType>> underlyingMdp) {

@@ -1,4 +1,6 @@
-#include "MonotonicityChecker.h"
+#include "storm-pars/analysis/MonotonicityChecker.h"
+
+#include "storm/solver/Z3SmtSolver.h"
 
 #include "storm/solver/Z3SmtSolver.h"
 

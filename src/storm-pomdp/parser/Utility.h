@@ -49,14 +49,11 @@ void parseIdentifierVector(std::istringstream& iss, std::vector<std::string>& ve
         for (int i = 0; i < count; i++) {
             vec.push_back(std::to_string(i));
         }
-        std::cout << "Parsed " << identifierName << " count: " << token << "\n";
     } else {
         // The token is not a number, so treat it as the first identifier.
         vec.push_back(trim(token));
-        std::cout << "Parsed " << identifierName << ": " << token << "\n";
         while (iss >> token) {
             vec.push_back(trim(token));
-            std::cout << "Parsed " << identifierName << ": " << token << "\n";
         }
     }
 }

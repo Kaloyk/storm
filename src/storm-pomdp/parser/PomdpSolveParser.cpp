@@ -27,7 +27,7 @@ struct POMDPcomponents {
     std::unordered_map<std::string, std::unordered_map<std::string, ValueType>> observations_prob;
     std::unordered_map<std::string, std::unordered_map<std::string, ValueType>> rewards;
     std::unordered_map<std::string, std::unordered_map<std::string, ValueType>> newRewards;
-    std::vector<std::string> newStates;  // Observation-incorporated states
+    std::vector<std::string> newStates;  // Observation-based states
     std::unordered_map<std::string, std::unordered_map<std::string, ValueType>> newTransitions;
     ValueType discount = storm::utility::one<ValueType>();
 };
@@ -109,7 +109,7 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                     }
                 }
             } else if (colonCount == 1) {
-                // <action> : <start-state> <p1> <p2> ... <pN>
+                // <action> : <start-state> <p1> <p2> ...
                 std::istringstream restStream(rest);
                 std::string action, start_state;
                 std::getline(restStream, action, ':');
@@ -262,24 +262,39 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                 observation = trim(observation);
 
                 if (rewardVal != storm::utility::zero<ValueType>()) {
-                    if (action == "*") {
-                        for (const auto& act : pomdp.actions) {
-                            pomdp.rewards[trim(start_state)][act + ":" + trim(end_state) + ":" + trim(observation)] = rewardVal;
+                    std::vector<std::string> actionsToUse;
+                    if (action == "*")
+                        actionsToUse = pomdp.actions;
+                    else
+                        actionsToUse.push_back(action);
+
+                    std::vector<std::string> startStatesToUse;
+                    if (start_state == "*")
+                        startStatesToUse = pomdp.states;
+                    else
+                        startStatesToUse.push_back(start_state);
+
+                    std::vector<std::string> endStatesToUse;
+                    if (end_state == "*")
+                        endStatesToUse = pomdp.states;
+                    else
+                        endStatesToUse.push_back(end_state);
+
+                    std::vector<std::string> observationsToUse;
+                    if (observation == "*")
+                        observationsToUse = pomdp.observations;
+                    else
+                        observationsToUse.push_back(observation);
+
+                    for (const auto& ss : startStatesToUse) {
+                        for (const auto& act : actionsToUse) {
+                            for (const auto& es : endStatesToUse) {
+                                for (const auto& obs : observationsToUse) {
+                                    pomdp.rewards[ss][act + ":" + es + ":" + obs] = rewardVal;
+                                    STORM_PRINT("Created reward for key: " + act + ":" + es + ":" + obs + " under start state: " + ss);
+                                }
+                            }
                         }
-                    } else if (start_state == "*") {
-                        for (const auto& s : pomdp.states) {
-                            pomdp.rewards[s][action + ":" + trim(end_state) + ":" + trim(observation)] = rewardVal;
-                        }
-                    } else if (end_state == "*") {
-                        for (const auto& s : pomdp.states) {
-                            pomdp.rewards[trim(start_state)][action + ":" + s + ":" + trim(observation)] = rewardVal;
-                        }
-                    } else if (observation == "*") {
-                        for (const auto& obs : pomdp.observations) {
-                            pomdp.rewards[trim(start_state)][action + ":" + trim(end_state) + ":" + obs] = rewardVal;
-                        }
-                    } else {
-                        pomdp.rewards[trim(start_state)][action + ":" + trim(end_state) + ":" + trim(observation)] = rewardVal;
                     }
                 }
             }
@@ -339,7 +354,7 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                     }
                 }
             }
-            // <action> : <start-state>
+            // R: <action> : <start-state>
             else if (colonCount == 1) {
                 std::istringstream headerStream(headerLine);
                 std::string action, start_state;
@@ -396,9 +411,15 @@ storm::storage::SparseMatrix<ValueType> buildTransitionMatrix(const std::unorder
                                                               const std::vector<std::string>& newStates, const std::vector<std::string>& actions) {
     STORM_PRINT("Building transition matrix");
 
-    uint64_t numStates = newStates.size();
-    uint64_t numChoices = newStates.size() * actions.size();
+    uint64_t numChoices = 0;
+    for (const auto& state : newStates) {
+        if (state == "initial")
+            numChoices += 1;
+        else
+            numChoices += (actions.size() - 1);
+    }
 
+    uint64_t numStates = newStates.size();
     std::unordered_map<std::string, uint64_t> stateIndices;
     uint64_t index = 0;
     for (const auto& state : newStates) {
@@ -410,28 +431,27 @@ storm::storage::SparseMatrix<ValueType> buildTransitionMatrix(const std::unorder
         entryCount += actionMap.size();
     }
 
-    storm::storage::SparseMatrixBuilder<ValueType> builder(numChoices,  // number of rows (each valid state-action pair)
-                                                           numStates,   // number of columns (states)
-                                                           entryCount,  // upper bound on nonzero entries
+    storm::storage::SparseMatrixBuilder<ValueType> builder(numChoices,  // rows
+                                                           numStates,   // columns
+                                                           entryCount,  // upper bound nonzero entries
                                                            true,        // forceDimensions
                                                            true,        // hasCustomRowGrouping
-                                                           numStates    // number of row groups (one per state)
-    );
+                                                           numStates);  // number of row groups
 
     uint64_t rowIndex = 0;
     for (const auto& state : newStates) {
         uint64_t rowGroupStart = rowIndex;
         builder.newRowGroup(rowGroupStart);
 
-        for (const auto& action : actions) {
+        if (state == "initial") {
             if (newTransitions.find(state) != newTransitions.end()) {
                 const auto& actionMap = newTransitions.at(state);
                 for (const auto& [actionEndState, probability] : actionMap) {
-                    auto pos = actionEndState.find(':');
+                    size_t pos = actionEndState.find(':');
                     if (pos == std::string::npos)
                         throw std::runtime_error("Invalid action:endState format: " + actionEndState);
                     std::string transitionAction = actionEndState.substr(0, pos);
-                    if (transitionAction == action) {
+                    if (transitionAction == "start") {
                         std::string endState = actionEndState.substr(pos + 1);
                         if (stateIndices.find(endState) == stateIndices.end())
                             throw std::runtime_error("EndState not found in newStates: " + endState);
@@ -441,6 +461,28 @@ storm::storage::SparseMatrix<ValueType> buildTransitionMatrix(const std::unorder
                 }
             }
             rowIndex++;
+        } else {
+            for (const auto& action : actions) {
+                if (action == "start")
+                    continue;
+                if (newTransitions.find(state) != newTransitions.end()) {
+                    const auto& actionMap = newTransitions.at(state);
+                    for (const auto& [actionEndState, probability] : actionMap) {
+                        size_t pos = actionEndState.find(':');
+                        if (pos == std::string::npos)
+                            throw std::runtime_error("Invalid action:endState format: " + actionEndState);
+                        std::string transitionAction = actionEndState.substr(0, pos);
+                        if (transitionAction == action) {
+                            std::string endState = actionEndState.substr(pos + 1);
+                            if (stateIndices.find(endState) == stateIndices.end())
+                                throw std::runtime_error("EndState not found in newStates: " + endState);
+                            uint64_t colIndex = stateIndices[endState];
+                            builder.addNextValue(rowIndex, colIndex, probability);
+                        }
+                    }
+                }
+                rowIndex++;
+            }
         }
     }
 
@@ -453,9 +495,15 @@ storm::storage::SparseMatrix<ValueType> buildRewardMatrix(const std::unordered_m
                                                           const std::vector<std::string>& newStates, const std::vector<std::string>& actions) {
     STORM_PRINT("Building reward matrix");
 
-    uint64_t numStates = newStates.size();
-    uint64_t numChoices = newStates.size() * actions.size();
+    uint64_t numChoices = 0;
+    for (const auto& state : newStates) {
+        if (state == "initial")
+            numChoices += 1;
+        else
+            numChoices += (actions.size() - 1);
+    }
 
+    uint64_t numStates = newStates.size();
     std::unordered_map<std::string, uint64_t> stateIndices;
     uint64_t index = 0;
     for (const auto& state : newStates) {
@@ -467,27 +515,27 @@ storm::storage::SparseMatrix<ValueType> buildRewardMatrix(const std::unordered_m
         entryCount += rewardMap.size();
     }
 
-    storm::storage::SparseMatrixBuilder<ValueType> builder(numChoices,  // number of rows (each valid state-action pair)
-                                                           numStates,   // number of columns (states)
-                                                           entryCount,  // upper bound on nonzero entries
+    storm::storage::SparseMatrixBuilder<ValueType> builder(numChoices,  // rows
+                                                           numStates,   // columns
+                                                           entryCount,  // upper bound nonzero entries
                                                            true,        // forceDimensions
                                                            true,        // hasCustomRowGrouping
-                                                           numStates    // number of row groups (one per state)
-    );
+                                                           numStates);  // row groups
 
     uint64_t rowIndex = 0;
     for (const auto& state : newStates) {
         uint64_t rowGroupStart = rowIndex;
         builder.newRowGroup(rowGroupStart);
-        for (const auto& action : actions) {
+
+        if (state == "initial") {
             if (rewards.find(state) != rewards.end()) {
                 const auto& rewardMap = rewards.at(state);
                 for (const auto& [rewardKey, rewardValue] : rewardMap) {
-                    auto pos = rewardKey.find(':');
+                    size_t pos = rewardKey.find(':');
                     if (pos == std::string::npos)
                         throw std::runtime_error("Invalid reward key format: " + rewardKey);
                     std::string rewardAction = rewardKey.substr(0, pos);
-                    if (rewardAction == action) {
+                    if (rewardAction == "start") {
                         std::string targetState = rewardKey.substr(pos + 1);
                         if (stateIndices.find(targetState) == stateIndices.end())
                             throw std::runtime_error("Target state not found in newStates: " + targetState);
@@ -497,6 +545,28 @@ storm::storage::SparseMatrix<ValueType> buildRewardMatrix(const std::unordered_m
                 }
             }
             rowIndex++;
+        } else {
+            for (const auto& action : actions) {
+                if (action == "start")
+                    continue;
+                if (rewards.find(state) != rewards.end()) {
+                    const auto& rewardMap = rewards.at(state);
+                    for (const auto& [rewardKey, rewardValue] : rewardMap) {
+                        size_t pos = rewardKey.find(':');
+                        if (pos == std::string::npos)
+                            throw std::runtime_error("Invalid reward key format: " + rewardKey);
+                        std::string rewardAction = rewardKey.substr(0, pos);
+                        if (rewardAction == action) {
+                            std::string targetState = rewardKey.substr(pos + 1);
+                            if (stateIndices.find(targetState) == stateIndices.end())
+                                throw std::runtime_error("Target state not found in newStates: " + targetState);
+                            uint64_t colIndex = stateIndices[targetState];
+                            builder.addNextValue(rowIndex, colIndex, rewardValue);
+                        }
+                    }
+                }
+                rowIndex++;
+            }
         }
     }
 
@@ -506,49 +576,52 @@ storm::storage::SparseMatrix<ValueType> buildRewardMatrix(const std::unordered_m
 
 template<typename ValueType>
 std::unordered_map<std::string, std::unordered_map<std::string, ValueType>> createNewTransitions(POMDPcomponents<ValueType>& pomdp) {
-    std::unordered_set<std::string> uniqueStates;
-    STORM_PRINT("Line 300");
+    STORM_PRINT("Creating new observation-based transitions");
+    pomdp.newTransitions.clear();
+    std::unordered_set<std::string> newStatesSet;
+
     for (const auto& action_entry : pomdp.transitions) {
         const std::string& action = action_entry.first;
 
+        auto obsProbIt = pomdp.observations_prob.find(action);
+        if (obsProbIt == pomdp.observations_prob.end()) {
+            STORM_PRINT("No observation probabilities for action: " + action);
+            continue;
+        }
+        const auto& obsProbMap = obsProbIt->second;
+
         for (const auto& transition_entry : action_entry.second) {
-            auto pos = transition_entry.first.find(':');
-            std::string startState = transition_entry.first.substr(0, pos);
-            std::string endState = transition_entry.first.substr(pos + 1);
-            ValueType transition_prob = transition_entry.second;
+            std::string baseTransitionKey = transition_entry.first;
+            size_t pos = baseTransitionKey.find(':');
+            if (pos == std::string::npos)
+                continue;
+            std::string baseSource = baseTransitionKey.substr(0, pos);
+            std::string baseDest = baseTransitionKey.substr(pos + 1);
+            ValueType baseProb = transition_entry.second;
 
-            ValueType totalProbability = storm::utility::zero<ValueType>();
+            std::string destPrefix = baseDest + ":";
 
-            if (pomdp.observations_prob.count(action) > 0) {
-                std::string obs_key_prefix = endState + ":";
-                for (const auto& obs_entry : pomdp.observations_prob.at(action)) {
-                    if (obs_entry.first.rfind(obs_key_prefix, 0) == 0) {
-                        std::string observation = obs_entry.first.substr(obs_key_prefix.length());
-                        ValueType obs_prob = obs_entry.second;
-
-                        ValueType new_prob = transition_prob * obs_prob;
-                        std::string newEndState = endState + ":" + observation;
-
-                        if (new_prob > storm::utility::zero<ValueType>()) {
-                            std::string actionEndStateKey = action + ":" + newEndState;
-                            pomdp.newTransitions[startState][actionEndStateKey] = new_prob;
-                            totalProbability += new_prob;
-                            uniqueStates.insert(newEndState);
-                            STORM_PRINT(actionEndStateKey);
-                        }
+            for (const auto& obsEntry : obsProbMap) {
+                if (obsEntry.first.rfind(destPrefix, 0) == 0) {
+                    std::string observation = obsEntry.first.substr(destPrefix.size());
+                    ValueType obsProb = obsEntry.second;
+                    ValueType newProb = baseProb * obsProb;
+                    if (newProb > storm::utility::zero<ValueType>()) {
+                        std::string newKey = action + ":" + baseDest + ":" + observation;
+                        pomdp.newTransitions[baseSource][newKey] += newProb;
+                        STORM_PRINT("Added new transition: " + baseSource + " -> " + newKey + " with probability ");
+                        newStatesSet.insert(baseDest + ":" + observation);
                     }
                 }
-            }
-
-            if (totalProbability < transition_prob) {
-                ValueType remaining_prob = transition_prob - totalProbability;
-                std::string actionEndStateKey = action + ":" + endState;
-                pomdp.newTransitions[startState][actionEndStateKey] = remaining_prob;
             }
         }
     }
 
-    pomdp.newStates.assign(uniqueStates.begin(), uniqueStates.end());
+    for (const auto& state : newStatesSet) {
+        pomdp.newStates.push_back(state);
+        STORM_PRINT("Added new state: " + state + "\n");
+    }
+
     return pomdp.newTransitions;
 }
 
@@ -579,26 +652,34 @@ void addInitialStateTransitions(POMDPcomponents<ValueType>& pomdp_component) {
 
 template<typename ValueType>
 void expandNewStatesTransitions(POMDPcomponents<ValueType>& pomdp_components) {
-    STORM_PRINT("Line 368 - Expanding transitions to new states");
-    // For each new state that is derived from an original state by appending an observation,
-    // copy all transitions from the original state to the new state.
-    for (const auto& newState : pomdp_components.newStates) {
-        auto pos = newState.find(':');
-        if (pos == std::string::npos)
-            continue;
+    STORM_PRINT("Expanding transitions to observation-based new states");
 
-        // Extract the original state name
-        std::string originalState = newState.substr(0, pos);
+    std::unordered_map<std::string, std::unordered_map<std::string, ValueType>> expandedTransitions;
 
-        // If the original state exists in the newTransitions mapping, copy its transitions.
-        if (pomdp_components.newTransitions.find(originalState) != pomdp_components.newTransitions.end()) {
-            for (const auto& actionEntry : pomdp_components.newTransitions[originalState]) {
-                // Merge the transition probability (if newState already has a transition for the same key,
-                // we add the probability; otherwise, the operator[] default constructs it to 0)
-                pomdp_components.newTransitions[newState][actionEntry.first] += actionEntry.second;
+    for (const auto& entry : pomdp_components.newTransitions) {
+        const std::string& startState = entry.first;
+        const auto& transitionsForState = entry.second;
+
+        if (startState == "initial") {
+            for (const auto& t : transitionsForState) {
+                expandedTransitions[startState][t.first] += t.second;
+            }
+        } else if (startState.find(':') != std::string::npos) {
+            for (const auto& t : transitionsForState) {
+                expandedTransitions[startState][t.first] += t.second;
+            }
+        } else {
+            for (const auto& obsState : pomdp_components.newStates) {
+                if (obsState.size() > startState.size() && obsState.compare(0, startState.size(), startState) == 0 && obsState[startState.size()] == ':') {
+                    for (const auto& t : transitionsForState) {
+                        expandedTransitions[obsState][t.first] += t.second;
+                    }
+                }
             }
         }
     }
+
+    pomdp_components.newTransitions = std::move(expandedTransitions);
 }
 
 template<typename ValueType>
@@ -623,64 +704,80 @@ template<typename ValueType>
 void expandObservationBasedRewards(POMDPcomponents<ValueType>& pomdp) {
     STORM_PRINT("Expanding observation-based rewards");
 
-    std::unordered_map<std::string, std::vector<std::string>> obsVariants;
-    for (const auto& ns : pomdp.newStates) {
-        size_t pos = ns.find(':');
-        if (pos != std::string::npos) {
-            std::string orig = ns.substr(0, pos);
-            obsVariants[orig].push_back(ns);
+    // Build a set for quick lookup of newStates.
+    std::unordered_set<std::string> newStatesSet(pomdp.newStates.begin(), pomdp.newStates.end());
+
+    // Helper lambda: Given a base state (e.g. "12"), return all observation-based states from pomdp.newStates.
+    auto getObservationVariants = [&pomdp](const std::string& base) -> std::vector<std::string> {
+        std::vector<std::string> variants;
+        for (const auto& ns : pomdp.newStates) {
+            size_t pos = ns.find(':');
+            if (pos != std::string::npos) {
+                std::string nsBase = ns.substr(0, pos);
+                if (nsBase == base) {
+                    variants.push_back(ns);
+                }
+            }
         }
-    }
+        return variants;
+    };
 
     std::unordered_map<std::string, std::unordered_map<std::string, ValueType>> newRewards;
 
     for (const auto& sourceEntry : pomdp.rewards) {
-        std::string origSource = sourceEntry.first;
+        std::string startKey = sourceEntry.first;
         const auto& innerMap = sourceEntry.second;
 
-        if (origSource.find(':') != std::string::npos) {
-            newRewards[origSource] = innerMap;
+        std::vector<std::string> startStates;
+        if (startKey.find(':') != std::string::npos) {
+            startStates.push_back(startKey);
+        } else {
+            startStates = getObservationVariants(startKey);
+        }
+        if (startStates.empty()) {
+            STORM_PRINT("No observation variants found for start state: " + startKey + ". Skipping rewards for this key.");
             continue;
         }
 
-        if (obsVariants.find(origSource) == obsVariants.end())
-            continue;
+        for (const auto& rewardEntry : innerMap) {
+            std::string rewardKey = rewardEntry.first;
+            size_t pos = rewardKey.find(':');
+            if (pos == std::string::npos)
+                continue;
 
-        for (const auto& obsSource : obsVariants[origSource]) {
-            auto& expandedRewardMap = newRewards[obsSource];
+            std::string actionPart = rewardKey.substr(0, pos);
+            std::string targetKey = rewardKey.substr(pos + 1);
 
-            for (const auto& rewardEntry : innerMap) {
-                std::string innerKey = rewardEntry.first;
-                size_t pos = innerKey.find(':');
-                if (pos == std::string::npos)
+            std::vector<std::string> targetStates;
+            if (targetKey.find(':') != std::string::npos) {
+                targetStates.push_back(targetKey);
+            } else {
+                targetStates = getObservationVariants(targetKey);
+            }
+            if (targetStates.empty()) {
+                STORM_PRINT("No observation variants found for target state: " + targetKey + ". Skipping reward key: " + rewardKey);
+                continue;
+            }
+
+            for (const auto& obsStart : startStates) {
+                if (newStatesSet.find(obsStart) == newStatesSet.end()) {
+                    STORM_PRINT("Skipping start state " + obsStart + " as it is not in newStatesSet.");
                     continue;
-
-                std::string actionPart = innerKey.substr(0, pos);
-                std::string targetPart = innerKey.substr(pos + 1);
-
-                if (targetPart.find(':') != std::string::npos) {
-                    if (expandedRewardMap.find(innerKey) == expandedRewardMap.end()) {
-                        expandedRewardMap[innerKey] = rewardEntry.second;
-                        STORM_PRINT("Copied reward for key: " + innerKey);
+                }
+                for (const auto& obsTarget : targetStates) {
+                    if (newStatesSet.find(obsTarget) == newStatesSet.end()) {
+                        STORM_PRINT("Skipping target state " + obsTarget + " as it is not in newStatesSet.");
+                        continue;
                     }
-                } else {
-                    if (obsVariants.find(targetPart) != obsVariants.end()) {
-                        for (const auto& obsTarget : obsVariants[targetPart]) {
-                            std::string newInnerKey = actionPart + ":" + obsTarget;
-                            expandedRewardMap[newInnerKey] = rewardEntry.second;
-                            STORM_PRINT("Created reward for key: " + newInnerKey);
-                        }
-                    } else {
-                        std::string newInnerKey = actionPart + ":" + targetPart;
-                        expandedRewardMap[newInnerKey] = rewardEntry.second;
-                        STORM_PRINT("Created reward for key (no obs variant): " + newInnerKey);
-                    }
+                    std::string newRewardKey = actionPart + ":" + obsTarget;
+                    newRewards[obsStart][newRewardKey] = rewardEntry.second;
+                    STORM_PRINT("Created reward for key: " + newRewardKey + " under start state: " + obsStart);
                 }
             }
         }
     }
 
-    pomdp.rewards = std::move(newRewards);
+    pomdp.newRewards = newRewards;
 }
 
 template<typename ValueType>
@@ -692,26 +789,21 @@ PomdpSolveParserResult<ValueType> PomdpSolveParser<ValueType>::parsePomdpSolveFi
     expandNewStatesTransitions(pomdp);
     filterDuplicateEntries(pomdp.newTransitions);
 
-    std::vector<std::string> combinedStates;
-    combinedStates.reserve(pomdp.states.size() + pomdp.newStates.size());
-    combinedStates.insert(combinedStates.end(), pomdp.states.begin(), pomdp.states.end());
-    combinedStates.insert(combinedStates.end(), pomdp.newStates.begin(), pomdp.newStates.end());
-
-    auto transitionMatrix = buildTransitionMatrix<ValueType>(pomdp.newTransitions, combinedStates, pomdp.actions);
+    auto transitionMatrix = buildTransitionMatrix<ValueType>(pomdp.newTransitions, pomdp.newStates, pomdp.actions);
 
     std::unordered_map<std::string, uint64_t> stateIndices;
     uint64_t index = 0;
-    for (const auto& state : combinedStates) {
+    for (const auto& state : pomdp.newStates) {
         stateIndices[state] = index++;
     }
 
-    storm::models::sparse::StateLabeling stateLabeling(combinedStates.size());
+    storm::models::sparse::StateLabeling stateLabeling(pomdp.newStates.size());
     stateLabeling.addLabel("init");
     stateLabeling.addLabelToState("init", stateIndices["initial"]);
 
     expandObservationBasedRewards(pomdp);
 
-    auto rewardMatrix = buildRewardMatrix<ValueType>(pomdp.newRewards, combinedStates, pomdp.actions);
+    auto rewardMatrix = buildRewardMatrix<ValueType>(pomdp.newRewards, pomdp.newStates, pomdp.actions);
 
     std::optional<storm::storage::SparseMatrix<ValueType>> optRewardMatrix = std::make_optional(rewardMatrix);
     std::optional<std::vector<ValueType>> optStateRewardVec = std::nullopt;
@@ -731,9 +823,9 @@ PomdpSolveParserResult<ValueType> PomdpSolveParser<ValueType>::parsePomdpSolveFi
     if (std::find(pomdp.observations.begin(), pomdp.observations.end(), "nothing") == pomdp.observations.end()) {
         pomdp.observations.push_back("nothing");
     }
-    std::vector<uint32_t> stateObservations(combinedStates.size(), 0);
-    for (uint64_t i = 0; i < combinedStates.size(); ++i) {
-        const std::string& state = combinedStates[i];
+    std::vector<uint32_t> stateObservations(pomdp.newStates.size(), 0);
+    for (uint64_t i = 0; i < pomdp.newStates.size(); ++i) {
+        const std::string& state = pomdp.newStates[i];
         if (state == "initial") {
             auto it = std::find(pomdp.observations.begin(), pomdp.observations.end(), "start");
             stateObservations[i] = static_cast<uint32_t>(std::distance(pomdp.observations.begin(), it));
@@ -758,7 +850,7 @@ PomdpSolveParserResult<ValueType> PomdpSolveParser<ValueType>::parsePomdpSolveFi
     storm::api::exportSparseModelAsDot(modelPtr, outputFilePath);
 
     ValueType discountFactor = static_cast<ValueType>(pomdp.discount);
-
+    STORM_PRINT("End of parser!!!\n");
     PomdpSolveParserResult<ValueType> result;
     new_pomdp->setIsCanonic();
     result.pomdp = new_pomdp;

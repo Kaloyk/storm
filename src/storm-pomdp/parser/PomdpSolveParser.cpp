@@ -711,26 +711,25 @@ void filterDuplicateEntries(std::unordered_map<std::string, std::unordered_map<s
 }
 
 template<typename ValueType>
+std::vector<std::string> getObservationVariantsForBase(const POMDPcomponents<ValueType>& pomdp, const std::string& base) {
+    std::vector<std::string> variants;
+    for (const auto& ns : pomdp.newStates) {
+        size_t pos = ns.find(':');
+        if (pos != std::string::npos) {
+            std::string nsBase = ns.substr(0, pos);
+            if (nsBase == base) {
+                variants.push_back(ns);
+            }
+        }
+    }
+    return variants;
+}
+
+template<typename ValueType>
 void expandObservationBasedRewards(POMDPcomponents<ValueType>& pomdp) {
     STORM_PRINT("Expanding observation-based rewards");
 
-    // Build a set for quick lookup of newStates.
     std::unordered_set<std::string> newStatesSet(pomdp.newStates.begin(), pomdp.newStates.end());
-
-    // Helper lambda: Given a base state (e.g. "12"), return all observation-based states from pomdp.newStates.
-    auto getObservationVariants = [&pomdp](const std::string& base) -> std::vector<std::string> {
-        std::vector<std::string> variants;
-        for (const auto& ns : pomdp.newStates) {
-            size_t pos = ns.find(':');
-            if (pos != std::string::npos) {
-                std::string nsBase = ns.substr(0, pos);
-                if (nsBase == base) {
-                    variants.push_back(ns);
-                }
-            }
-        }
-        return variants;
-    };
 
     std::unordered_map<std::string, std::unordered_map<std::string, ValueType>> newRewards;
 
@@ -742,7 +741,7 @@ void expandObservationBasedRewards(POMDPcomponents<ValueType>& pomdp) {
         if (startKey.find(':') != std::string::npos) {
             startStates.push_back(startKey);
         } else {
-            startStates = getObservationVariants(startKey);
+            startStates = getObservationVariantsForBase(pomdp, startKey);
         }
         if (startStates.empty()) {
             STORM_PRINT("No observation variants found for start state: " + startKey + ". Skipping rewards for this key.");
@@ -762,7 +761,7 @@ void expandObservationBasedRewards(POMDPcomponents<ValueType>& pomdp) {
             if (targetKey.find(':') != std::string::npos) {
                 targetStates.push_back(targetKey);
             } else {
-                targetStates = getObservationVariants(targetKey);
+                targetStates = getObservationVariantsForBase(pomdp, targetKey);
             }
             if (targetStates.empty()) {
                 STORM_PRINT("No observation variants found for target state: " + targetKey + ". Skipping reward key: " + rewardKey + "\n");
@@ -774,14 +773,24 @@ void expandObservationBasedRewards(POMDPcomponents<ValueType>& pomdp) {
                     STORM_PRINT("Skipping start state " + obsStart + " as it is not in newStatesSet.\n");
                     continue;
                 }
+                // Check if there is any transition from this observation-based start.
+                if (pomdp.newTransitions.find(obsStart) == pomdp.newTransitions.end()) {
+                    STORM_PRINT("No transitions from start state: " + obsStart + "\n");
+                    continue;
+                }
+                const auto& transMap = pomdp.newTransitions.at(obsStart);
                 for (const auto& obsTarget : targetStates) {
                     if (newStatesSet.find(obsTarget) == newStatesSet.end()) {
                         STORM_PRINT("Skipping target state " + obsTarget + " as it is not in newStatesSet.\n");
                         continue;
                     }
-                    std::string newRewardKey = actionPart + ":" + obsTarget;
-                    newRewards[obsStart][newRewardKey] = rewardEntry.second;
-                    STORM_PRINT("Created reward for key: " + newRewardKey + " under start state: " + obsStart + "\n");
+                    std::string transKey = actionPart + ":" + obsTarget;
+                    if (transMap.find(transKey) != transMap.end()) {
+                        newRewards[obsStart][transKey] = rewardEntry.second;
+                        STORM_PRINT("Created reward for key: " + transKey + " under start state: " + obsStart + "\n");
+                    } else {
+                        STORM_PRINT("No corresponding transition found for reward key: " + transKey + " under start state: " + obsStart + "\n");
+                    }
                 }
             }
         }

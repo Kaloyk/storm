@@ -64,7 +64,6 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
     POMDPcomponents<ValueType> pomdp;
     std::ifstream infile(filename);
     if (!infile.good()) {
-        STORM_PRINT("Error")
         std::cerr << "Error opening file: " << filename << std::endl;
         return pomdp;
     }

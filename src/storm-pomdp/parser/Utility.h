@@ -63,12 +63,12 @@ std::vector<ValueType> readArrayTokens(std::istringstream& iss, std::ifstream& i
     std::vector<ValueType> values;
     std::string token;
 
-    //try reading first line
+    // try reading first line
     while (iss >> token) {
         values.push_back(convertToValueType<ValueType>(token));
     }
 
-    //if empty try reading next non-empty line
+    // if empty try reading next non-empty line
     if (values.empty()) {
         std::string line;
         while (std::getline(infile, line)) {
@@ -83,3 +83,4 @@ std::vector<ValueType> readArrayTokens(std::istringstream& iss, std::ifstream& i
     }
     return values;
 }
+

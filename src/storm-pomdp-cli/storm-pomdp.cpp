@@ -258,7 +258,7 @@ bool performAnalysis(std::shared_ptr<storm::models::sparse::Pomdp<ValueType>> co
                                                                                                         pomdpSettings.isBeliefExplorationUnfoldSet());
         auto const& beliefExplorationSettings = storm::settings::getModule<storm::settings::modules::BeliefExplorationSettings>();
         beliefExplorationSettings.setValuesInOptionsStruct(options);
-        if(pomdpSettings.isPOMDPsolveInputSet()) {
+        if (pomdpSettings.isPOMDPsolveInputSet()) {
             options.recomputeInitialValueWithoutDiscounting = true;
         }
         storm::pomdp::modelchecker::BeliefExplorationPomdpModelChecker<storm::models::sparse::Pomdp<ValueType>, BeliefType> checker(pomdp, options);

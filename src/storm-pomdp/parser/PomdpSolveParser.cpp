@@ -30,6 +30,7 @@ struct POMDPcomponents {
     std::vector<std::string> newStates;  // Observation-based states
     std::unordered_map<std::string, std::unordered_map<std::string, ValueType>> newTransitions;
     ValueType discount = storm::utility::one<ValueType>();
+    std::vector<bool> start_state_mask;
 };
 
 enum class MatrixType { NORMAL, IDENTITY, UNIFORM };
@@ -75,34 +76,139 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
             continue;
 
         line = trim(line);
-        std::istringstream iss(line);
-        std::string word;
-        iss >> word;
+        if (line.empty())
+            continue;
+
+        std::string word = extractKeyword(line);
         if (word.empty())
             continue;
 
-        if (word == "discount:") {
+        std::string afterColon = extractAfterColon(line);
+        std::istringstream iss(afterColon);
+
+        if (word == "discount") {
             std::string token;
             iss >> token;
             pomdp.discount = convertToValueType<ValueType>(token);
-        } else if (word == "values:") {
+        } else if (word == "values") {
             continue;
-        } else if (word == "states:") {
-            parseIdentifierVector(iss, pomdp.states, "state");
-        } else if (word == "actions:") {
-            parseIdentifierVector(iss, pomdp.actions, "action");
-        } else if (word == "observations:") {
+        } else if (word == "states") {
+            parseIdentifierVector(iss, pomdp.states, "state", infile);
+        } else if (word == "actions") {
+            parseIdentifierVector(iss, pomdp.actions, "action", infile);
+        } else if (word == "observations") {
             STORM_PRINT("Parsing observations");
-            parseIdentifierVector(iss, pomdp.observations, "observation");
-        } else if (word == "start:") {
-            STORM_PRINT("Parsing start probabilities");
+            parseIdentifierVector(iss, pomdp.observations, "observation", infile);
+        } else if (word == "start include") {
+            STORM_PRINT("Parsing start include directive\n");
+
+            if (pomdp.start_state_mask.empty()) {
+                pomdp.start_state_mask.resize(pomdp.states.size(), false);
+            }
+
+            std::vector<std::string> includedStates;
+            std::string stateName;
+            while (iss >> stateName) {
+                includedStates.push_back(stateName);
+            }
+
+            for (const auto& stateName : includedStates) {
+                // Check if it's an index
+                bool isNumber = !stateName.empty() && std::all_of(stateName.begin(), stateName.end(), ::isdigit);
+                if (isNumber) {
+                    int stateIdx = std::stoi(stateName);
+                    if (stateIdx >= 0 && stateIdx < pomdp.states.size()) {
+                        pomdp.start_state_mask[stateIdx] = true;
+                    } else {
+                        STORM_PRINT("Warning: Invalid state index in start include: " + stateName + "\n");
+                    }
+                } else {
+                    // Try to find by name
+                    auto it = std::find(pomdp.states.begin(), pomdp.states.end(), stateName);
+                    if (it != pomdp.states.end()) {
+                        int idx = std::distance(pomdp.states.begin(), it);
+                        pomdp.start_state_mask[idx] = true;
+                    } else {
+                        STORM_PRINT("Warning: Unknown state name in start include: " + stateName + "\n");
+                    }
+                }
+            }
+        } else if (word == "start exclude") {
+            STORM_PRINT("Parsing start exclude directive");
+
+            if (pomdp.start_state_mask.empty()) {
+                pomdp.start_state_mask.resize(pomdp.states.size(), true);
+            }
+
+            std::vector<std::string> excludedStates;
+            std::string stateName;
+            while (iss >> stateName) {
+                excludedStates.push_back(stateName);
+            }
+
+            for (const auto& stateName : excludedStates) {
+                // Check if it's an index
+                bool isNumber = !stateName.empty() && std::all_of(stateName.begin(), stateName.end(), ::isdigit);
+                if (isNumber) {
+                    int stateIdx = std::stoi(stateName);
+                    if (stateIdx >= 0 && stateIdx < pomdp.states.size()) {
+                        pomdp.start_state_mask[stateIdx] = false;
+                    } else {
+                        STORM_PRINT("Warning: Invalid state index in start exclude: " + stateName + "\n");
+                    }
+                } else {
+                    // Try to find by name
+                    auto it = std::find(pomdp.states.begin(), pomdp.states.end(), stateName);
+                    if (it != pomdp.states.end()) {
+                        int idx = std::distance(pomdp.states.begin(), it);
+                        pomdp.start_state_mask[idx] = false;
+                    } else {
+                        STORM_PRINT("Warning: Unknown state name in start exclude: " + stateName + "\n");
+                    }
+                }
+            }
+        } else if (word == "start") {
+            STORM_PRINT("Parsing start directive\n");
+
+            std::string token;
+            if (iss >> token) {
+                if (token == "uniform") {
+                    // uniform is handled later
+                    continue;
+                }
+                STORM_PRINT("Parsing start directive with token: \n");
+
+                // single state name
+                auto it = std::find(pomdp.states.begin(), pomdp.states.end(), token);
+                if (it != pomdp.states.end()) {
+                    pomdp.start_state_mask.resize(pomdp.states.size(), false);
+                    int idx = std::distance(pomdp.states.begin(), it);
+                    pomdp.start_state_mask[idx] = true;
+                    STORM_PRINT("Parsed start directive state\n");
+                    continue;
+                }
+
+                // single state index
+                bool isNumber = !token.empty() && std::all_of(token.begin(), token.end(), ::isdigit);
+                if (isNumber) {
+                    int stateIdx = std::stoi(token);
+                    if (stateIdx >= 0 && stateIdx < pomdp.states.size()) {
+                        pomdp.start_state_mask.resize(pomdp.states.size(), false);
+                        pomdp.start_state_mask[stateIdx] = true;
+                        STORM_PRINT("Parsed start directive index\n");
+                        continue;
+                    }
+                }
+                iss.seekg(0);
+            }
+
             std::vector<ValueType> startProbs = readArrayTokens<ValueType>(iss, infile);
-            pomdp.start_probabilities.insert(pomdp.start_probabilities.end(), startProbs.begin(), startProbs.end());
-        } else if (word == "T:") {
+            pomdp.start_probabilities = startProbs;
+            STORM_PRINT("Parsed start directive probabilities\n");
+        } else if (word == "T") {
             STORM_PRINT("Parsing transition(s)");
 
-            std::string rest;
-            std::getline(iss, rest);
+            std::string rest = afterColon;
             rest = trim(rest);
             int colonCount = std::count(rest.begin(), rest.end(), ':');
             if (colonCount >= 2) {
@@ -258,11 +364,10 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                     }
                 }
             }
-        } else if (word == "O:") {
+        } else if (word == "O") {
             STORM_PRINT("Parsing observation probabilities \n");
 
-            std::string rest;
-            std::getline(iss, rest);
+            std::string rest = afterColon;
             rest = trim(rest);
             int colonCount = std::count(rest.begin(), rest.end(), ':');
             if (colonCount >= 2) {
@@ -427,10 +532,9 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                     }
                 }
             }
-        } else if (word == "R:") {
+        } else if (word == "R") {
             STORM_PRINT("Parsing rewards");
-            std::string headerLine;
-            std::getline(iss, headerLine);
+            std::string headerLine = afterColon;
             headerLine = trim(headerLine);
             size_t colonCount = std::count(headerLine.begin(), headerLine.end(), ':');
 
@@ -457,7 +561,7 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                 if (remainderStream >> rewardStr) {
                     rewardVal = convertToValueType<ValueType>(rewardStr);
                 } else {
-                    //try next line
+                    // try next line
                     std::string nextLine;
                     if (std::getline(infile, nextLine) && !isIgnoredLine(nextLine)) {
                         std::istringstream nextLineStream(trim(nextLine));
@@ -928,12 +1032,49 @@ std::unordered_map<std::string, std::unordered_map<std::string, ValueType>> crea
 }
 
 template<typename ValueType>
+void calculateStartProbabilities(POMDPcomponents<ValueType>& pomdp) {
+    const size_t numStates = pomdp.states.size();
+
+    // Default case: no start state mask or probabilities provided
+    if (pomdp.start_state_mask.empty() && pomdp.start_probabilities.empty()) {
+        pomdp.start_probabilities.resize(numStates);
+        ValueType uniformProb = storm::utility::one<ValueType>() / static_cast<ValueType>(numStates);
+        std::fill(pomdp.start_probabilities.begin(), pomdp.start_probabilities.end(), uniformProb);
+        return;
+    }
+
+    // Case 2: start_state_mask is initialized
+    if (!pomdp.start_state_mask.empty()) {
+        size_t activeStates = 0;
+        for (bool active : pomdp.start_state_mask) {
+            if (active)
+                activeStates++;
+        }
+
+        if (activeStates == 0) {
+            STORM_PRINT("Warning: No states eligible as start states. Defaulting to uniform distribution.\n");
+            pomdp.start_probabilities.resize(numStates);
+            ValueType uniformProb = storm::utility::one<ValueType>() / static_cast<ValueType>(numStates);
+            std::fill(pomdp.start_probabilities.begin(), pomdp.start_probabilities.end(), uniformProb);
+        } else {
+            pomdp.start_probabilities.resize(numStates);
+            ValueType activeProb = storm::utility::one<ValueType>() / static_cast<ValueType>(activeStates);
+            for (size_t i = 0; i < numStates; i++) {
+                pomdp.start_probabilities[i] = pomdp.start_state_mask[i] ? activeProb : storm::utility::zero<ValueType>();
+            }
+        }
+        return;
+    }
+    // Case 3: start_probabilities is initialized is the default body of addInitialStateTransitions()
+}
+
+template<typename ValueType>
 void addInitialStateTransitions(POMDPcomponents<ValueType>& pomdp_component) {
     const std::string initialState = "initial";
     const std::string action = "start";
 
     if (pomdp_component.start_probabilities.size() != pomdp_component.states.size()) {
-        std::cerr << "Error: start_probabilities and states vectors must be of the same size." << std::endl;
+        STORM_PRINT("Error: start_probabilities and states vectors must be of the same size.\n");
         return;
     }
 
@@ -999,7 +1140,7 @@ void filterDuplicateEntries(std::unordered_map<std::string, std::unordered_map<s
             if (filteredActionMap.find(actionEndState) == filteredActionMap.end()) {
                 filteredActionMap[actionEndState] = probability;
             } else {
-                std::cerr << "Duplicate entry removed: " << startState << " -> " << actionEndState << " (Probability: " << probability << ")\n";
+                STORM_PRINT("Duplicate entry removed: " + startState + " -> " + actionEndState + " (Probability: )\n");
             }
         }
 
@@ -1101,6 +1242,7 @@ PomdpSolveParserResult<ValueType> PomdpSolveParser<ValueType>::parsePomdpSolveFi
     POMDPcomponents<ValueType> pomdp = parsePomdpFile<ValueType>(filename);
 
     createNewTransitions(pomdp);
+    calculateStartProbabilities(pomdp);
     addInitialStateTransitions(pomdp);
     expandNewStatesTransitions(pomdp);
     filterDuplicateEntries(pomdp.newTransitions);

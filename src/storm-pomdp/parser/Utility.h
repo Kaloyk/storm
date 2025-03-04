@@ -3,6 +3,10 @@
 #include <string>
 #include <vector>
 
+const std::vector<std::string> POMDP_KEYWORDS = {
+    "discount", "values", "states", "actions", "observations", "start include", "start exclude", "start", "T", "O", "R",
+};
+
 // Utility function to split a string based on a delimiter
 inline std::vector<std::string> split(const std::string& s, char delimiter) {
     std::vector<std::string> tokens;
@@ -14,11 +18,23 @@ inline std::vector<std::string> split(const std::string& s, char delimiter) {
     return tokens;
 }
 
-// Helper function to trim whitespace from both ends of a string
+// Helper function to trim whitespace from both ends of a string and remove comments
 std::string trim(const std::string& str) {
-    size_t first = str.find_first_not_of(" \t\n\r");
-    size_t last = str.find_last_not_of(" \t\n\r");
-    return (first == std::string::npos || last == std::string::npos) ? "" : str.substr(first, last - first + 1);
+    // Remove comments
+    std::string result = str;
+    size_t commentPos = result.find('#');
+    if (commentPos != std::string::npos) {
+        result = result.substr(0, commentPos);
+    }
+    
+    // Trim whitespace
+    size_t first = result.find_first_not_of(" \t\n\r");
+    size_t last = result.find_last_not_of(" \t\n\r");
+    if (first == std::string::npos || last == std::string::npos) {
+        return "";
+    }
+    
+    return result.substr(first, last - first + 1);
 }
 
 inline bool isIgnoredLine(const std::string& line) {
@@ -36,26 +52,123 @@ ValueType convertToValueType(const std::string& s) {
     return val;
 }
 
-void parseIdentifierVector(std::istringstream& iss, std::vector<std::string>& vec, const std::string& identifierName) {
-    std::string token;
-    if (!(iss >> token))
-        return;
+bool startsWithKeyword(const std::string& line) {
+    std::string trimmed = trim(line);
+    for (const auto& keyword : POMDP_KEYWORDS) {
 
-    // Check if the token is composed only of digits.
-    bool is_number = !token.empty() && std::all_of(token.begin(), token.end(), ::isdigit);
+        if (trimmed.find(keyword) == 0) {
+            size_t pos = keyword.length();
 
-    if (is_number) {
-        int count = std::stoi(token);
-        for (int i = 0; i < count; i++) {
-            vec.push_back(std::to_string(i));
+            // Only whitespace or/and colon after keyword is allowed
+            if (pos < trimmed.length() && (trimmed[pos] == ':' || std::isspace(trimmed[pos]))) {
+                if (trimmed[pos] == ':') {
+                    return true;
+                }
+
+                size_t colonPos = trimmed.find(':', pos);
+                if (colonPos != std::string::npos) {
+                    bool onlyWhitespace = true;
+                    for (size_t i = pos; i < colonPos; i++) {
+                        if (!std::isspace(trimmed[i])) {
+                            onlyWhitespace = false;
+                            break;
+                        }
+                    }
+                    if (onlyWhitespace) {
+                        return true;
+                    }
+                }
+            }
         }
-    } else {
-        // The token is not a number, so treat it as the first identifier.
+    }
+    return false;
+}
+
+// Parse identifiers that can span multiple lines
+void parseIdentifierVector(std::istringstream& iss, std::vector<std::string>& vec, const std::string& identifierName, std::ifstream& infile) {
+    std::string token;
+
+    if (iss >> token) {
+        trim(token);
+        bool is_number = !token.empty() && std::all_of(token.begin(), token.end(), ::isdigit);
+
+        if (is_number) {
+            int count = std::stoi(token);
+            for (int i = 0; i < count; i++) {
+                vec.push_back(std::to_string(i));
+            }
+            return;
+        }
+
         vec.push_back(trim(token));
+
         while (iss >> token) {
             vec.push_back(trim(token));
         }
     }
+
+    std::string line;
+    std::streampos prevPos = infile.tellg();
+
+    while (std::getline(infile, line)) {
+        if (isIgnoredLine(line)) {
+            continue;
+        }
+        trim(line);
+
+        if (startsWithKeyword(line)) {
+            infile.seekg(prevPos);
+            break;
+        }
+
+        std::istringstream lineStream(line);
+        while (lineStream >> token) {
+            vec.push_back(trim(token));
+        }
+
+        prevPos = infile.tellg();
+    }
+}
+
+std::string extractKeyword(const std::string& line) {
+    if (!startsWithKeyword(line)) {
+        return "";
+    }
+
+    std::string trimmed = trim(line);
+
+    for (const auto& keyword : POMDP_KEYWORDS) {
+        if (trimmed.find(keyword) == 0) {
+            return keyword;
+        }
+    }
+
+    return "";
+}
+
+std::string extractAfterColon(const std::string& line) {
+    std::string trimmed = trim(line);
+
+    std::string keyword = "";
+    for (const auto& k : POMDP_KEYWORDS) {
+        if (trimmed.find(k) == 0) {
+            keyword = k;
+            break;
+        }
+    }
+
+    if (keyword.empty()) {
+        return "";
+    }
+
+    size_t startPos = keyword.length();
+    size_t colonPos = trimmed.find(':', startPos);
+
+    if (colonPos == std::string::npos) {
+        return "";
+    }
+
+    return trim(trimmed.substr(colonPos + 1));
 }
 
 template<typename ValueType>
@@ -83,4 +196,3 @@ std::vector<ValueType> readArrayTokens(std::istringstream& iss, std::ifstream& i
     }
     return values;
 }
-

@@ -406,25 +406,24 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                     }
                 }
 
-                if (probability != storm::utility::zero<ValueType>()) {
-                    if (action == "*" && end_state == "*") {
-                        for (const auto& act : pomdp.actions) {
-                            for (const auto& state : pomdp.states) {
-                                pomdp.observations_prob[act][state + ":" + observation] = probability;
-                            }
-                        }
-                    } else if (action == "*") {
-                        for (const auto& act : pomdp.actions) {
-                            pomdp.observations_prob[act][end_state + ":" + observation] = probability;
-                        }
-                    } else if (end_state == "*") {
+                if (action == "*" && end_state == "*") {
+                    for (const auto& act : pomdp.actions) {
                         for (const auto& state : pomdp.states) {
-                            pomdp.observations_prob[action][state + ":" + observation] = probability;
+                            pomdp.observations_prob[act][state + ":" + observation] = probability;
                         }
-                    } else {
-                        pomdp.observations_prob[action][end_state + ":" + observation] = probability;
                     }
+                } else if (action == "*") {
+                    for (const auto& act : pomdp.actions) {
+                        pomdp.observations_prob[act][end_state + ":" + observation] = probability;
+                    }
+                } else if (end_state == "*") {
+                    for (const auto& state : pomdp.states) {
+                        pomdp.observations_prob[action][state + ":" + observation] = probability;
+                    }
+                } else {
+                    pomdp.observations_prob[action][end_state + ":" + observation] = probability;
                 }
+
             } else if (rest.find(':') != std::string::npos) {
                 // <action> : <end-state> <p1> <p2> ... <pN>
                 std::istringstream restStream(rest);
@@ -436,14 +435,12 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                 std::vector<ValueType> probabilities = readArrayTokens<ValueType>(restStream, infile);
 
                 for (uint64_t i = 0; i < pomdp.observations.size(); i++) {
-                    if (probabilities[i] != storm::utility::zero<ValueType>()) {
-                        if (action == "*") {
-                            for (const auto& act : pomdp.actions) {
-                                pomdp.observations_prob[act][end_state + ":" + pomdp.observations[i]] = probabilities[i];
-                            }
-                        } else {
-                            pomdp.observations_prob[action][end_state + ":" + pomdp.observations[i]] = probabilities[i];
+                    if (action == "*") {
+                        for (const auto& act : pomdp.actions) {
+                            pomdp.observations_prob[act][end_state + ":" + pomdp.observations[i]] = probabilities[i];
                         }
+                    } else {
+                        pomdp.observations_prob[action][end_state + ":" + pomdp.observations[i]] = probabilities[i];
                     }
                 }
             } else {
@@ -577,42 +574,41 @@ POMDPcomponents<ValueType> parsePomdpFile(const std::string& filename) {
                     }
                 }
 
-                if (rewardVal != storm::utility::zero<ValueType>()) {
-                    std::vector<std::string> actionsToUse;
-                    if (action == "*")
-                        actionsToUse = pomdp.actions;
-                    else
-                        actionsToUse.push_back(action);
+                std::vector<std::string> actionsToUse;
+                if (action == "*")
+                    actionsToUse = pomdp.actions;
+                else
+                    actionsToUse.push_back(action);
 
-                    std::vector<std::string> startStatesToUse;
-                    if (start_state == "*")
-                        startStatesToUse = pomdp.states;
-                    else
-                        startStatesToUse.push_back(start_state);
+                std::vector<std::string> startStatesToUse;
+                if (start_state == "*")
+                    startStatesToUse = pomdp.states;
+                else
+                    startStatesToUse.push_back(start_state);
 
-                    std::vector<std::string> endStatesToUse;
-                    if (end_state == "*")
-                        endStatesToUse = pomdp.states;
-                    else
-                        endStatesToUse.push_back(end_state);
+                std::vector<std::string> endStatesToUse;
+                if (end_state == "*")
+                    endStatesToUse = pomdp.states;
+                else
+                    endStatesToUse.push_back(end_state);
 
-                    std::vector<std::string> observationsToUse;
-                    if (observation == "*")
-                        observationsToUse = pomdp.observations;
-                    else
-                        observationsToUse.push_back(observation);
+                std::vector<std::string> observationsToUse;
+                if (observation == "*")
+                    observationsToUse = pomdp.observations;
+                else
+                    observationsToUse.push_back(observation);
 
-                    for (const auto& ss : startStatesToUse) {
-                        for (const auto& act : actionsToUse) {
-                            for (const auto& es : endStatesToUse) {
-                                for (const auto& obs : observationsToUse) {
-                                    pomdp.rewards[ss][act + ":" + es + ":" + obs] = rewardVal;
-                                    STORM_PRINT("Created reward for key: " + act + ":" + es + ":" + obs + " under start state: " + ss + "\n");
-                                }
+                for (const auto& ss : startStatesToUse) {
+                    for (const auto& act : actionsToUse) {
+                        for (const auto& es : endStatesToUse) {
+                            for (const auto& obs : observationsToUse) {
+                                pomdp.rewards[ss][act + ":" + es + ":" + obs] = rewardVal;
+                                STORM_PRINT("Created reward for key: " + act + ":" + es + ":" + obs + " under start state: " + ss + "\n");
                             }
                         }
                     }
                 }
+
             }
             // R: <action> : <start-state> : <end-state> <token> <token> ... <token>
             else if (colonCount == 2) {
